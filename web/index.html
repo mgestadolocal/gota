@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Cota — análisis de terreno</title>
+  <meta name="description" content="Dibuja tu terreno y ve por dónde escurre el agua, dónde se acumula, sus pendientes y cuánto movimiento de tierra necesitas. Gratis, para todo Chile." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/maplibre-gl@4.7.1/dist/maplibre-gl.css" />
+  <link rel="stylesheet" href="estilo.css" />
+  <script src="https://cdn.jsdelivr.net/npm/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/geotiff@2.1.3/dist-browser/geotiff.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/proj4@2.12.1/dist/proj4.js"></script>
+  <script src="config.js"></script>
+</head>
+<body>
+  <div id="mapa"></div>
+
+  <aside id="panel">
+    <header class="marca">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M3 24c5-1 7-6 11-6s5 4 9 3 5-5 6-7" /><path d="M3 18c4-1 6-7 10-7s5 3 8 2 4-4 5-6" opacity=".55" /><path d="M3 12c3-1 5-6 8-6s4 2 6 1" opacity=".3" /></svg>
+      <div><h1>Cota</h1><p>Entiende tu terreno antes de moverlo</p></div>
+      <button id="plegar" class="icono" title="Plegar panel" aria-label="Plegar panel">▾</button>
+    </header>
+
+    <div class="cuerpo">
+      <section class="paso" id="paso-terreno">
+        <h2><span>1</span>Tu terreno</h2>
+        <form id="buscar" class="buscar"><input id="q" type="search" placeholder="Buscar lugar (Enter)…" autocomplete="off" /></form>
+        <div class="botones">
+          <button id="b-dibujar" class="primario">Dibujar polígono</button>
+          <label class="boton secundario" title="DEM de dron, LiDAR o levantamiento, en GeoTIFF">
+            Subir DEM <input id="archivo" type="file" accept=".tif,.tiff,image/tiff" hidden />
+          </label>
+        </div>
+        <p id="ayuda-dibujo" class="ayuda" hidden>Haz clic para agregar vértices. Doble clic o clic en el primer punto para cerrar. <a href="#" id="deshacer">Deshacer punto</a></p>
+        <div id="info-poligono" class="info" hidden></div>
+        <div class="fuente">
+          <span>Elevación:</span>
+          <strong id="fuente-nombre">Copernicus GLO-30 (30 m, todo Chile)</strong>
+          <a href="#" id="quitar-archivo" hidden>usar Copernicus</a>
+        </div>
+        <button id="b-analizar" class="primario ancho" disabled>Analizar terreno</button>
+        <div id="estado" class="estado" hidden></div>
+      </section>
+
+      <section class="paso" id="paso-resultados" hidden>
+        <h2><span>2</span>Qué dice el terreno</h2>
+        <div id="tarjetas" class="tarjetas"></div>
+        <div class="capas" role="radiogroup" aria-label="Capa">
+          <button data-capa="escurrimiento" class="activa">Escurrimiento</button>
+          <button data-capa="encharcamiento">Encharcamiento</button>
+          <button data-capa="pendiente">Pendiente</button>
+          <button data-capa="elevacion">Elevación</button>
+          <button data-capa="cortes" disabled>Corte/relleno</button>
+          <button data-capa="ninguna">Satélite</button>
+        </div>
+        <div id="control-umbral" class="control">
+          <label for="umbral">Mostrar cauces que drenan más de <b id="umbral-txt">0,5 ha</b></label>
+          <input id="umbral" type="range" min="0" max="100" value="35" />
+        </div>
+        <div id="leyenda" class="leyenda"></div>
+        <div class="interruptores">
+          <label><input type="checkbox" id="t-curvas" checked /> Curvas de nivel <small id="eq-txt"></small></label>
+          <label><input type="checkbox" id="t-3d" /> Vista 3D</label>
+          <label><input type="checkbox" id="t-lluvia" /> Simular lluvia</label>
+        </div>
+        <p id="aviso-dsm" class="aviso" hidden>Copernicus es un modelo de <b>superficie</b>: incluye árboles y edificios, y su celda es de ~30 m. Sirve para un prediagnóstico; para nivelar o diseñar el drenaje, sube un DEM de dron o LiDAR.</p>
+      </section>
+
+      <section class="paso" id="paso-cortes" hidden>
+        <h2><span>3</span>Movimiento de tierra</h2>
+        <label class="campo">Superficie de diseño
+          <select id="modo">
+            <option value="nivelado">Plano horizontal (nivelado)</option>
+            <option value="ajuste">Plano de mejor ajuste (mínimo movimiento)</option>
+            <option value="pendiente">Plano con pendiente dada</option>
+          </select>
+        </label>
+        <div id="campos-pendiente" class="fila" hidden>
+          <label class="campo">Pendiente (%)<input id="pend" type="number" step="0.05" min="0" max="30" value="0.2" /></label>
+          <label class="campo">Hacia
+            <select id="azimut">
+              <option value="0">Norte</option><option value="45">Noreste</option><option value="90">Este</option><option value="135">Sureste</option>
+              <option value="180">Sur</option><option value="225">Suroeste</option><option value="270" selected>Oeste</option><option value="315">Noroeste</option>
+            </select>
+          </label>
+        </div>
+        <label id="campo-cota" class="campo">Cota en el centro (m) <small>vacío = equilibrar corte y relleno</small>
+          <input id="cota" type="number" step="0.1" placeholder="automática" />
+        </label>
+        <button id="b-cortes" class="primario ancho">Calcular volúmenes</button>
+        <div id="res-cortes" class="tarjetas" hidden></div>
+      </section>
+
+      <section class="paso" id="paso-exportar" hidden>
+        <h2><span>4</span>Llevártelo</h2>
+        <div class="botones">
+          <button id="b-informe" class="secundario">Informe PDF</button>
+          <button id="b-tif" class="secundario">GeoTIFF de la capa</button>
+          <button id="b-geojson" class="secundario">Polígono (GeoJSON)</button>
+        </div>
+      </section>
+
+      <footer class="pie">
+        Elevación: <a href="https://spacedata.copernicus.eu/collections/copernicus-digital-elevation-model" target="_blank" rel="noopener">Copernicus DEM</a> © DLR/Airbus, ESA ·
+        Relieve 3D: <a href="https://registry.opendata.aws/terrain-tiles/" target="_blank" rel="noopener">Terrain Tiles</a> · Prediagnóstico referencial; no reemplaza un levantamiento topográfico.
+      </footer>
+    </div>
+  </aside>
+
+  <div id="informe" aria-hidden="true"></div>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>
