@@ -48,13 +48,15 @@ const vacio = { type: "FeatureCollection", features: [] };
 mapa.on("load", () => {
   mapa.addSource("curvas", { type: "geojson", data: vacio });
   mapa.addSource("poligono", { type: "geojson", data: vacio });
-  mapa.addSource("gotas", { type: "geojson", data: vacio });
+  mapa.addSource("gotas", { type: "geojson", data: vacio, lineMetrics: true });
   mapa.addLayer({ id: "curvas", type: "line", source: "curvas",
     paint: { "line-color": "#ffffff", "line-opacity": ["case", ["get", "maestra"], 0.75, 0.38], "line-width": ["case", ["get", "maestra"], 1.4, 0.7] } });
   mapa.addLayer({ id: "pol-relleno", type: "fill", source: "poligono", filter: ["==", "$type", "Polygon"], paint: { "fill-color": "#ffd166", "fill-opacity": 0.08 } });
   mapa.addLayer({ id: "pol-linea", type: "line", source: "poligono", filter: ["!=", "$type", "Point"], paint: { "line-color": "#ffd166", "line-width": 2.4 } });
-  mapa.addLayer({ id: "gotas", type: "circle", source: "gotas",
-    paint: { "circle-radius": ["interpolate", ["linear"], ["zoom"], 10, 1.4, 16, 3.2], "circle-color": "#9be3ff", "circle-opacity": ["get", "o"], "circle-blur": 0.3 } });
+  // gotas: estela con degradé (cola transparente, cabeza brillante)
+  mapa.addLayer({ id: "gotas", type: "line", source: "gotas", layout: { "line-cap": "round", "line-join": "round" },
+    paint: { "line-width": ["interpolate", ["linear"], ["zoom"], 10, 1.6, 16, 3.6], "line-opacity": ["get", "o"],
+      "line-gradient": ["interpolate", ["linear"], ["line-progress"], 0, "rgba(155,227,255,0)", 0.6, "rgba(155,227,255,0.7)", 1, "#effbff"] } });
   mapa.addLayer({ id: "pol-vertices", type: "circle", source: "poligono", filter: ["==", "$type", "Point"],
     paint: { "circle-radius": 4.5, "circle-color": "#ffd166", "circle-stroke-color": "#1d2420", "circle-stroke-width": 1.5 } });
 });
@@ -364,63 +366,92 @@ $("orbitar").onclick = () => {
 for (const ev of ["mousedown", "touchstart", "wheel"]) mapa.getCanvasContainer().addEventListener(ev, () => orbita.raf && detenerOrbita(), { passive: true });
 
 // ---------- simulación de lluvia (partículas que siguen el flujo D8) ----------
+// Movimiento por tiempo (celdas por segundo), no por cuadro: se ve igual de fluido con 30 o 120 fps.
+// Cada gota deja una estela corta; al llegar a una poza o laguna se funde en ella.
 const VX = [1, 1, 0, -1, -1, -1, 0, 1], VY = [0, 1, 1, 1, 0, -1, -1, -1];
-const lluvia = { raf: 0, gotas: [], celdas: null, aLL: null, cuadro: 0 };
+const lluvia = { raf: 0, gotas: [], celdas: null, aLL: null, ultimo: 0, veloc: 1 };
+const ESTELA = 7; // posiciones que se guardan para la estela
+
+const enPoza = (i) => (E.an.tormenta ? E.an.tormenta.profT : E.an.prof)[i] >= 0.05;
 
 function nuevaGota(g) {
-  g.i = lluvia.celdas[(Math.random() * lluvia.celdas.length) | 0];
-  if (lluvia.esc) {
-    // muestreo por rechazo: nacen más gotas donde el suelo escurre más (menos donde se infiltra)
-    for (let k = 0; k < 20 && Math.random() > lluvia.esc[g.i] / lluvia.escMax; k++) g.i = lluvia.celdas[(Math.random() * lluvia.celdas.length) | 0];
+  const sortear = () => lluvia.celdas[(Math.random() * lluvia.celdas.length) | 0];
+  g.i = sortear();
+  for (let k = 0; k < 30; k++) {
+    // no nacen dentro de pozas; con tormenta, nacen más donde el suelo escurre más
+    // probabilidad base alta en todo el polígono; algo más donde se genera más escorrentía
+    const ok = !enPoza(g.i) && E.an.dir[g.i] >= 0 && (!lluvia.esc || Math.random() <= 0.45 + 0.55 * Math.min(1, lluvia.esc[g.i] / lluvia.escMax));
+    if (ok) break;
+    g.i = sortear();
   }
   g.t = Math.random();
   g.vida = 0;
-  g.max = 160 + Math.random() * 260;
+  g.max = 3 + Math.random() * 4; // segundos
+  g.funde = 0; // > 0 cuando entra a una poza
+  g.hist = [];
   return g;
 }
+
 function iniciarLluvia() {
   const { mask } = E.an;
   const idx = [];
   for (let i = 0; i < mask.length; i++) if (mask[i]) idx.push(i);
   lluvia.celdas = Int32Array.from(idx);
   lluvia.aLL = afin(E.g);
-  // con tormenta: más gotas cuanto más escurre, y nacen donde se genera escorrentía
+  // con tormenta: más gotas y más rápidas cuanto más escurre
   const T = E.an.tormenta;
   const escMedia = T ? (T.stats.genera / (idx.length * E.g.dx * E.g.dy)) * 1000 : 0; // mm
   lluvia.esc = T ? T.escurre : null;
   lluvia.escMax = 1;
-  if (T) for (const i of lluvia.celdas) if (T.escurre[i] > lluvia.escMax) lluvia.escMax = T.escurre[i];
+  if (T) {
+    // referencia = percentil 90 fuera de pozas (las lagunas escurren ~100 % y aplastarían al resto)
+    const v = Array.from(lluvia.celdas).filter((i) => !enPoza(i)).map((i) => T.escurre[i]).sort((x, y) => x - y);
+    lluvia.escMax = Math.max(1, v[Math.floor(v.length * 0.9)] || 1);
+  }
   const n = T
-    ? Math.min(6000, Math.max(150, Math.round((idx.length / 3) * Math.min(4, escMedia / 15))))
-    : Math.min(2500, Math.max(400, Math.round(idx.length / 3)));
+    ? Math.min(2500, Math.max(200, Math.round((idx.length / 4) * Math.min(3, escMedia / 15))))
+    : Math.min(1800, Math.max(400, Math.round(idx.length / 4)));
+  lluvia.veloc = T ? 1 + 0.6 * Math.min(1, escMedia / 40) : 1;
   lluvia.gotas = Array.from({ length: n }, () => nuevaGota({}));
   lluvia.activa = true;
-  const paso = () => {
+  lluvia.ultimo = 0;
+
+  const paso = (ts) => {
     if (!lluvia.activa) return;
-    const { dir, pendiente: pe, prof } = E.an;
+    lluvia.raf = requestAnimationFrame(paso);
+    const dt = lluvia.ultimo ? Math.min(0.1, (ts - lluvia.ultimo) / 1000) : 0;
+    lluvia.ultimo = ts;
+    if (dt <= 0) return;
+    const { dir, pendiente: pe } = E.an;
     const w = E.g.w, h = E.g.h;
     const f = [];
     for (const g of lluvia.gotas) {
-      const k = dir[g.i];
-      if (k < 0 || ++g.vida > g.max) { nuevaGota(g); continue; }
-      const enPozo = (E.an.tormenta ? E.an.tormenta.profT : prof)[g.i] >= 0.05;
-      g.t += enPozo ? 0.025 : 0.06 + 0.3 * Math.min(1, pe[g.i] / 15);
+      g.vida += dt;
+      if (g.vida > g.max || (g.funde && (g.funde += dt) > 0.6)) { nuevaGota(g); continue; }
+      // celdas por segundo: más rápido en pendiente, lento al fundirse en una poza
+      const v = g.funde ? 1.5 : lluvia.veloc * (5 + 16 * Math.min(1, pe[g.i] / 15));
+      g.t += v * dt;
+      let reinicio = false;
       while (g.t >= 1) {
         g.t -= 1;
+        const k = dir[g.i];
         const r = (g.i / w) | 0, c = g.i - r * w;
-        const rr = r + VY[dir[g.i]], cc = c + VX[dir[g.i]];
-        if (rr < 0 || cc < 0 || rr >= h || cc >= w) { nuevaGota(g); break; }
+        const rr = r + VY[k], cc = c + VX[k];
+        if (k < 0 || rr < 0 || cc < 0 || rr >= h || cc >= w) { reinicio = true; break; }
         g.i = rr * w + cc;
-        if (dir[g.i] < 0) { nuevaGota(g); break; }
+        if (dir[g.i] < 0) { reinicio = true; break; }
+        if (!g.funde && enPoza(g.i)) g.funde = 0.001;
       }
+      if (reinicio) { nuevaGota(g); continue; }
       const r = (g.i / w) | 0, c = g.i - r * w, kk = dir[g.i];
-      if (kk < 0) continue;
-      const pos = lluvia.aLL(c + 0.5 + VX[kk] * g.t, r + 0.5 + VY[kk] * g.t);
-      const o = Math.min(1, g.vida / 20, (g.max - g.vida) / 30) * 0.9;
-      f.push({ type: "Feature", properties: { o }, geometry: { type: "Point", coordinates: pos } });
+      g.hist.push(lluvia.aLL(c + 0.5 + VX[kk] * g.t, r + 0.5 + VY[kk] * g.t));
+      if (g.hist.length > ESTELA) g.hist.shift();
+      if (g.hist.length < 2) continue;
+      const aparece = Math.min(1, g.vida / 0.4), desaparece = Math.min(1, (g.max - g.vida) / 0.5);
+      const o = Math.min(aparece, desaparece) * (g.funde ? 1 - g.funde / 0.6 : 1);
+      f.push({ type: "Feature", properties: { o }, geometry: { type: "LineString", coordinates: g.hist.slice() } });
     }
-    if (lluvia.cuadro++ % 2 === 0) mapa.getSource("gotas").setData({ type: "FeatureCollection", features: f });
-    lluvia.raf = requestAnimationFrame(paso);
+    mapa.getSource("gotas").setData({ type: "FeatureCollection", features: f });
   };
   lluvia.raf = requestAnimationFrame(paso);
 }
