@@ -62,14 +62,11 @@
       const b = f.querySelector("button"); b.disabled = true;
       try {
         const r = await fetch(`${API}/auth/login`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ correo, clave }) });
-        if (r.status === 401) throw new Error("Correo o clave incorrectos.");
-        if (r.status === 429) throw new Error("Correo o clave: demasiados intentos. Espera 15 minutos.");
-        if (r.status === 403) throw new Error("Correo o clave: tu cuenta está desactivada. Escríbenos.");
-        if (!r.ok) throw new Error("El acceso de clientes aún no está habilitado. Agenda una demo y te creamos tu cuenta.");
-        const { token } = await r.json();
-        try { localStorage.setItem("gotyx-sesion", token); } catch {}
+        const d = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(d.error || "El acceso de clientes aún no está habilitado. Agenda una demo y te creamos tu cuenta.");
+        try { localStorage.setItem("gotyx-sesion", d.token); } catch {}
         location.href = "app/";
-      } catch (err) { est.textContent = err.message.startsWith("Correo") || err.message.startsWith("El acceso") ? err.message : "No pudimos conectar. Intenta de nuevo."; }
+      } catch (err) { est.textContent = err.message && !/fetch|network/i.test(err.message) ? err.message : "No pudimos conectar. Intenta de nuevo."; }
       finally { b.disabled = false; }
     });
   </script>
