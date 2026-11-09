@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="es-CL">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Ingresar — Gotyx</title>
+  <meta name="robots" content="noindex, follow" />
+  <meta name="description" content="Acceso de clientes a Gotyx, simulación hidrológica para terrenos en Chile." />
+  <meta name="theme-color" content="#050e16" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M16 2.5S6 13.6 6 20a10 10 0 0 0 20 0C26 13.6 16 2.5 16 2.5Z' fill='%235cc8ff'/%3E%3C/svg%3E" />
+  <link rel="apple-touch-icon" href="assets/logo.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap" />
+  <link rel="stylesheet" href="assets/landing.css" />
+  <script src="app/config.js"></script>
+</head>
+<body>
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <symbol id="gota" viewBox="0 0 32 32"><path d="M16 2.5S6 13.6 6 20a10 10 0 0 0 20 0C26 13.6 16 2.5 16 2.5Z" fill="#5cc8ff" /><path d="M9.2 19.5c2.2-.9 3.8.8 6.3.1s3.8-1.6 6.5-.4" stroke="#050e16" stroke-width="1.8" fill="none" stroke-linecap="round" /></symbol>
+    <symbol id="flecha" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" /></symbol>
+  </svg>
+  <main class="acceso">
+    <div class="visual">
+      <video autoplay muted loop playsinline poster="assets/clips/aculeo.jpg"><source src="assets/clips/aculeo.mp4" type="video/mp4" /></video>
+      <a class="logo" href="./"><svg><use href="#gota" /></svg><span>Got<i>yx</i></span></a>
+      <div>
+        <div class="etiqueta">Laguna de Aculeo · tormenta de 100 años</div>
+        <blockquote>11,5 millones de m³ vuelven a la laguna. <em>¿Y en tu terreno?</em></blockquote>
+      </div>
+    </div>
+    <div class="lado">
+      <div class="caja">
+        <div class="etiqueta">Acceso clientes</div>
+        <h1>Ingresa a Gotyx</h1>
+        <p>Usa el correo y la clave que te enviamos después de tu demo.</p>
+        <form id="form-acceso" novalidate>
+          <div class="campo"><label for="a-correo">Correo</label><input id="a-correo" type="email" autocomplete="username" required /></div>
+          <div class="campo"><label for="a-clave">Clave</label><input id="a-clave" type="password" autocomplete="current-password" required /></div>
+          <div class="fila"><span></span><a href="./#demo">¿Olvidaste tu clave?</a></div>
+          <button class="boton primario" type="submit">Ingresar<svg><use href="#flecha" /></svg></button>
+          <div class="estado" id="estado-acceso" role="status"></div>
+        </form>
+        <div class="separador">¿Aún no tienes cuenta?</div>
+        <a class="boton fantasma" href="./#demo">Agenda una demo guiada</a>
+        <p style="text-align:center;margin-top:18px;font-size:14px;color:var(--suave)">o <a href="app/?demo=macul" style="color:var(--agua);font-weight:700;text-decoration:none">explora la demo abierta</a></p>
+      </div>
+    </div>
+  </main>
+  <script>
+    const API = (window.GOTA_API || "").replace(/\/$/, "");
+    const f = document.getElementById("form-acceso"), est = document.getElementById("estado-acceso");
+    f.addEventListener("submit", async (e) => {
+      e.preventDefault(); est.textContent = "";
+      const correo = document.getElementById("a-correo").value.trim(), clave = document.getElementById("a-clave").value;
+      if (!correo || !clave) { est.textContent = "Escribe tu correo y tu clave."; return; }
+      const b = f.querySelector("button"); b.disabled = true;
+      try {
+        const r = await fetch(`${API}/auth/login`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ correo, clave }) });
+        if (r.status === 401) throw new Error("Correo o clave incorrectos.");
+        if (!r.ok) throw new Error("El acceso de clientes aún no está habilitado. Agenda una demo y te creamos tu cuenta.");
+        const { token } = await r.json();
+        try { localStorage.setItem("gotyx-sesion", token); } catch {}
+        location.href = "app/";
+      } catch (err) { est.textContent = err.message.startsWith("Correo") || err.message.startsWith("El acceso") ? err.message : "No pudimos conectar. Intenta de nuevo."; }
+      finally { b.disabled = false; }
+    });
+  </script>
+</body>
+</html>

@@ -165,3 +165,13 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
   #informe .meta, #informe .nota { color: #555; font-size: 9pt; }
   #informe .romper { break-before: page; }
 }
+
+/* ---------- modo demo ---------- */
+.demo-aviso { position: fixed; top: 12px; left: 50%; transform: translateX(-50%); z-index: 6; display: flex; gap: 14px; align-items: center;
+  background: #06111a; color: #eaf6ff; border: 1px solid rgba(92, 200, 255, 0.4); border-radius: 40px; padding: 8px 10px 8px 18px;
+  font-size: 13.5px; box-shadow: var(--sombra); white-space: nowrap; }
+.demo-aviso a { background: #5cc8ff; color: #06111a; font-weight: 800; text-decoration: none; padding: 7px 14px; border-radius: 30px; }
+.demo-casos a { font-weight: 700; }
+@media (min-width: 721px) { .demo-aviso { left: calc(50% + 186px); } }
+@media (max-width: 720px) { .demo-aviso { top: 8px; font-size: 12px; } .demo-aviso span { display: none; } }
+@media (max-width: 720px) { .modo-demo .ctl3d { display: none; } }

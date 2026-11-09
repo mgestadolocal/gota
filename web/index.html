@@ -1,142 +1,345 @@
 <!doctype html>
-<html lang="es">
+<html lang="es-CL">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Gota.ai — agua y terreno</title>
-  <meta name="description" content="Gota.ai: dibuja tu terreno y ve por dónde escurre el agua, dónde se acumula, sus pendientes y cuánto movimiento de tierra necesitas. Gratis, para todo Chile." />
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M16 2.5S6 13.6 6 20a10 10 0 0 0 20 0C26 13.6 16 2.5 16 2.5Z' fill='%232b7bba'/%3E%3Cpath d='M9.2 19.5c2.2-.9 3.8.8 6.3.1s3.8-1.6 6.5-.4' stroke='white' stroke-width='1.8' fill='none' stroke-linecap='round'/%3E%3C/svg%3E" />
+  <title>Gotyx · Simulación de aguas lluvia, escorrentía e inundación para terrenos en Chile</title>
+  <meta name="description" content="Simula por dónde escurre el agua lluvia, dónde se acumula y cuánto caudal baja por cada quebrada en cualquier terreno de Chile, con tormentas de 2 a 100 años. Prediagnóstico hidrológico en segundos para inmobiliarias, agrícolas, municipios y consultoras." />
+  <meta name="robots" content="index, follow, max-image-preview:large" />
+  <link rel="canonical" href="https://gotyx.cl/" />
+  <meta property="og:type" content="website" />
+  <meta property="og:locale" content="es_CL" />
+  <meta property="og:site_name" content="Gotyx" />
+  <meta property="og:url" content="https://gotyx.cl/" />
+  <meta property="og:title" content="Gotyx · ¿A dónde se va el agua de tu terreno cuando llueve fuerte?" />
+  <meta property="og:description" content="Escorrentía, pozas y caudal por quebrada con tormentas de 2 a 100 años, para cualquier terreno de Chile. En segundos y en el navegador." />
+  <meta property="og:image" content="https://gotyx.cl/assets/og.jpg" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta property="og:image:alt" content="Simulación 3D de lluvia escurriendo por la Quebrada de Macul, Santiago" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Gotyx · ¿A dónde se va el agua de tu terreno?" />
+  <meta name="twitter:description" content="Simulación hidrológica para cualquier terreno de Chile: escorrentía, pozas y caudales con tormentas extremas." />
+  <meta name="twitter:image" content="https://gotyx.cl/assets/og.jpg" />
+  <meta name="theme-color" content="#050e16" />
+  <link rel="preload" as="image" href="assets/clips/hero.jpg" fetchpriority="high" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "Organization",
+        "@id": "https://gotyx.cl/#organizacion",
+        "name": "Gotyx",
+        "url": "https://gotyx.cl/",
+        "logo": "https://gotyx.cl/assets/logo.png",
+        "areaServed": "CL",
+        "description": "Simulación hidrológica de escorrentía, acumulación y caudales para terrenos en Chile."
+      },
+      {
+        "@type": "SoftwareApplication",
+        "name": "Gotyx",
+        "applicationCategory": "BusinessApplication",
+        "applicationSubCategory": "Simulación hidrológica",
+        "operatingSystem": "Web",
+        "inLanguage": "es-CL",
+        "url": "https://gotyx.cl/",
+        "publisher": { "@id": "https://gotyx.cl/#organizacion" },
+        "featureList": "Escorrentía y cauces, Encharcamiento y pozas, Tormentas de diseño de 2 a 100 años, Caudal por quebrada, Pendientes, Cobertura del suelo, Vista 3D, Informe PDF, Exportación GeoTIFF y GeoJSON, Carga de DEM de dron o LiDAR",
+        "offers": { "@type": "Offer", "price": "0", "priceCurrency": "CLP", "description": "Demo abierta y piloto con cuenta por invitación" }
+      },
+      {
+        "@type": "FAQPage",
+        "mainEntity": [
+          { "@type": "Question", "name": "¿Qué es Gotyx?", "acceptedAnswer": { "@type": "Answer", "text": "Una plataforma web de simulación hidrológica: dibujas un terreno en cualquier lugar de Chile y ves por dónde escurre el agua lluvia, dónde se acumula, cuánto caudal baja por cada quebrada y cómo cambia con tormentas de 2 a 100 años de período de retorno." } },
+          { "@type": "Question", "name": "¿Sirve para evaluar el riesgo de inundación o anegamiento de un terreno?", "acceptedAnswer": { "@type": "Answer", "text": "Sí, como prediagnóstico. Muestra las zonas que se anegan, las quebradas que cruzan el terreno y el agua que llega desde los predios vecinos. Para un proyecto de ingeniería se complementa con un levantamiento topográfico y un estudio hidrológico de detalle." } },
+          { "@type": "Question", "name": "¿De dónde salen los datos de lluvia y de relieve?", "acceptedAnswer": { "@type": "Answer", "text": "El relieve viene del modelo satelital Copernicus GLO-30 (30 m) o del DEM de tu dron o LiDAR. Las lluvias extremas, de GPEX (TU Delft), y la cobertura del suelo, de ESA WorldCover." } },
+          { "@type": "Question", "name": "¿Funciona en cualquier región de Chile?", "acceptedAnswer": { "@type": "Answer", "text": "Sí, desde Arica hasta Magallanes. En el norte desértico hay menos registros de lluvias extremas, y la plataforma lo indica cuando ocurre." } },
+          { "@type": "Question", "name": "¿Puedo usar el modelo de elevación de mi dron?", "acceptedAnswer": { "@type": "Answer", "text": "Sí. Subes un GeoTIFF en UTM (WGS84 o SIRGAS) y el análisis se hace con su resolución." } },
+          { "@type": "Question", "name": "¿Cuánto cuesta?", "acceptedAnswer": { "@type": "Answer", "text": "La demo es abierta y gratis. Para analizar tus propios terrenos, agenda una demo guiada y te creamos una cuenta para el piloto." } }
+        ]
+      }
+    ]
+  }
+  </script>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M16 2.5S6 13.6 6 20a10 10 0 0 0 20 0C26 13.6 16 2.5 16 2.5Z' fill='%235cc8ff'/%3E%3Cpath d='M9.2 19.5c2.2-.9 3.8.8 6.3.1s3.8-1.6 6.5-.4' stroke='%23050e16' stroke-width='1.8' fill='none' stroke-linecap='round'/%3E%3C/svg%3E" />
+  <link rel="apple-touch-icon" href="assets/logo.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" />
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/maplibre-gl@4.7.1/dist/maplibre-gl.css" />
-  <link rel="stylesheet" href="estilo.css" />
-  <script src="https://cdn.jsdelivr.net/npm/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/geotiff@2.1.3/dist-browser/geotiff.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/proj4@2.12.1/dist/proj4.js"></script>
-  <script src="config.js"></script>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&family=JetBrains+Mono:wght@500;600;700&display=swap" />
+  <link rel="stylesheet" href="assets/landing.css" />
+  <script src="app/config.js"></script>
 </head>
 <body>
-  <div id="mapa"></div>
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <symbol id="gota" viewBox="0 0 32 32"><path d="M16 2.5S6 13.6 6 20a10 10 0 0 0 20 0C26 13.6 16 2.5 16 2.5Z" fill="#5cc8ff" /><path d="M9.2 19.5c2.2-.9 3.8.8 6.3.1s3.8-1.6 6.5-.4" stroke="#050e16" stroke-width="1.8" fill="none" stroke-linecap="round" /><path d="M10.4 24c2-.7 3.6.5 5.6 0s3.4-1.2 5.6-.3" stroke="#050e16" stroke-width="1.8" fill="none" stroke-linecap="round" opacity=".6" /></symbol>
+    <symbol id="flecha" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" /></symbol>
+    <symbol id="play" viewBox="0 0 24 24"><path d="M8 5.5v13l11-6.5z" fill="currentColor" /></symbol>
+    <symbol id="check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5" /></symbol>
+  </svg>
 
-  <aside id="panel">
-    <header class="marca">
-      <svg viewBox="0 0 32 32" aria-hidden="true"><path class="gota" d="M16 2.5C16 2.5 6 13.6 6 20a10 10 0 0 0 20 0C26 13.6 16 2.5 16 2.5Z" /><path class="curva" d="M9.2 19.5c2.2-.9 3.8.8 6.3.1s3.8-1.6 6.5-.4" /><path class="curva" d="M10.4 24c2-.7 3.6.5 5.6 0s3.4-1.2 5.6-.3" opacity=".7" /></svg>
-      <div><h1>Gota<span>.ai</span></h1><p>Por dónde corre el agua en tu terreno</p></div>
-      <button id="plegar" class="icono" title="Plegar panel" aria-label="Plegar panel">▾</button>
-    </header>
-
-    <div class="cuerpo">
-      <section class="paso" id="paso-terreno">
-        <h2><span>1</span>Tu terreno</h2>
-        <form id="buscar" class="buscar"><input id="q" type="search" placeholder="Buscar lugar (Enter)…" autocomplete="off" /></form>
-        <div class="botones">
-          <button id="b-dibujar" class="primario">Dibujar polígono</button>
-          <label class="boton secundario" title="DEM de dron, LiDAR o levantamiento, en GeoTIFF">
-            Subir DEM <input id="archivo" type="file" accept=".tif,.tiff,image/tiff" hidden />
-          </label>
-        </div>
-        <p id="ayuda-dibujo" class="ayuda" hidden>Haz clic para agregar vértices. Doble clic o clic en el primer punto para cerrar. <a href="#" id="deshacer">Deshacer punto</a></p>
-        <div id="info-poligono" class="info" hidden></div>
-        <div class="fuente">
-          <span>Elevación:</span>
-          <strong id="fuente-nombre">Copernicus GLO-30 (30 m, todo Chile)</strong>
-          <a href="#" id="quitar-archivo" hidden>usar Copernicus</a>
-        </div>
-        <button id="b-analizar" class="primario ancho" disabled>Analizar terreno</button>
-        <div id="estado" class="estado" hidden></div>
-      </section>
-
-      <section class="paso" id="paso-resultados" hidden>
-        <h2><span>2</span>Qué dice el terreno</h2>
-        <div id="tarjetas" class="tarjetas"></div>
-        <div class="capas" role="radiogroup" aria-label="Capa">
-          <button data-capa="escurrimiento" class="activa">Escurrimiento</button>
-          <button data-capa="encharcamiento">Encharcamiento</button>
-          <button data-capa="pendiente">Pendiente</button>
-          <button data-capa="elevacion">Elevación</button>
-          <button data-capa="cobertura" disabled>Cobertura</button>
-          <button data-capa="ninguna">Satélite</button>
-        </div>
-        <div id="control-umbral" class="control">
-          <label for="umbral">Mostrar cauces que drenan más de <b id="umbral-txt">0,5 ha</b></label>
-          <input id="umbral" type="range" min="0" max="100" value="35" />
-        </div>
-        <div id="leyenda" class="leyenda"></div>
-        <div class="interruptores">
-          <label><input type="checkbox" id="t-curvas" checked /> Curvas de nivel <small id="eq-txt"></small></label>
-          <label><input type="checkbox" id="t-3d" /> Vista 3D</label>
-          <label><input type="checkbox" id="t-lluvia" /> Simular lluvia</label>
-        </div>
-        <p id="aviso-dsm" class="aviso" hidden>Copernicus es un modelo de <b>superficie</b>: incluye árboles y edificios, y su celda es de ~30 m. Sirve para un prediagnóstico; para nivelar o diseñar el drenaje, sube un DEM de dron o LiDAR.</p>
-      </section>
-
-      <section class="paso" id="paso-tormenta" hidden>
-        <h2><span>3</span>Simula una tormenta</h2>
-        <p class="ayuda">Elige qué tan fuerte es la lluvia. Una lluvia "de 10 años" es la que, en promedio, se da una vez cada 10 años en este lugar.</p>
-        <div class="retornos" role="radiogroup" aria-label="Período de retorno">
-          <button data-t="2">2 años</button><button data-t="5">5 años</button><button data-t="10" class="activa">10 años</button>
-          <button data-t="20">20 años</button><button data-t="50">50 años</button><button data-t="100">100 años</button>
-        </div>
-        <div id="idf" class="idf"></div>
-        <label class="campo">Tipo de suelo
-          <select id="suelo">
-            <option value="A">A · Arenoso o muy permeable</option>
-            <option value="B">B · Franco, permeabilidad media</option>
-            <option value="C" selected>C · Franco-arcilloso o con capa dura</option>
-            <option value="D">D · Arcilloso, delgado sobre roca o compactado</option>
-          </select>
-          <small id="suelo-txt"></small>
-        </label>
-        <button id="b-tormenta" class="primario ancho">Simular tormenta</button>
-        <div id="res-tormenta" class="tarjetas" hidden></div>
-      </section>
-
-      <section class="paso" id="paso-exportar" hidden>
-        <h2><span>4</span>Llevártelo</h2>
-        <div class="botones">
-          <button id="b-informe" class="secundario">Informe PDF</button>
-          <button id="b-tif" class="secundario">GeoTIFF de la capa</button>
-          <button id="b-geojson" class="secundario">Polígono (GeoJSON)</button>
-        </div>
-      </section>
-
-      <footer class="pie">
-        Elevación: <a href="https://spacedata.copernicus.eu/collections/copernicus-digital-elevation-model" target="_blank" rel="noopener">Copernicus DEM</a> © DLR/Airbus, ESA ·
-        Relieve 3D: <a href="https://registry.opendata.aws/terrain-tiles/" target="_blank" rel="noopener">Terrain Tiles</a> ·
-        Lluvias extremas: <a href="https://doi.org/10.4121/12764429.v4" target="_blank" rel="noopener">GPEX</a> (Gründemann et al., CC BY 4.0) ·
-        Cobertura: <a href="https://esa-worldcover.org" target="_blank" rel="noopener">ESA WorldCover 2021</a> (CC BY 4.0) · Prediagnóstico referencial; no reemplaza un levantamiento topográfico.
-      </footer>
+  <!-- navegación -->
+  <header class="nav" id="nav">
+    <div class="contenedor">
+      <a class="logo" href="#"><svg><use href="#gota" /></svg><span>Got<i>yx</i></span></a>
+      <ul>
+        <li><a href="#funciona">Cómo funciona</a></li>
+        <li><a href="#casos">Casos</a></li>
+        <li><a href="#quien">Para quién</a></li>
+        <li><a href="#datos">Datos</a></li>
+        <li><a href="#preguntas">Preguntas</a></li>
+      </ul>
+      <div class="acciones">
+        <a class="boton fantasma chico" href="ingresar.html">Ingresar</a>
+        <a class="boton primario chico" href="#demo">Agenda una demo</a>
+      </div>
     </div>
-  </aside>
+  </header>
 
-  <div id="ctl3d" class="ctl3d" hidden>
-    <div class="ctl3d-titulo">Vista 3D</div>
-    <div class="ctl3d-fila" title="Girar">
-      <button data-girar="-45" aria-label="Girar a la izquierda">⟲</button>
-      <span>Girar</span>
-      <button data-girar="45" aria-label="Girar a la derecha">⟳</button>
+  <!-- portada -->
+  <section class="hero">
+    <video class="fondo" autoplay muted loop playsinline preload="auto" poster="assets/clips/hero.jpg" aria-label="Simulación 3D de lluvia escurriendo por la Quebrada de Macul"><source src="assets/clips/hero.mp4" type="video/mp4" /></video>
+    <svg class="topo" id="topo" viewBox="0 0 1600 900" preserveAspectRatio="xMidYMid slice" aria-hidden="true"></svg>
+    <div class="hud" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+    <div class="lectura" aria-hidden="true"><span class="vivo"></span><b>SIMULACIÓN EN VIVO</b><br /><span id="lectura">LAT −33.5000 · LON −70.4970<br />T = 100 AÑOS · 134 mm / 24 h</span></div>
+    <div class="contenedor">
+      <div class="contenido">
+        <div class="etiqueta aparece">Simulación hidrológica · todo Chile</div>
+        <h1 class="h1 aparece d1">Cuando llueve fuerte, ¿a dónde se va <em>el agua?</em></h1>
+        <p class="bajada aparece d2">Gotyx simula por dónde escurre, dónde se acumula y cuánto caudal baja en cualquier terreno de Chile, con lluvias extremas reales. En segundos, en el navegador.</p>
+        <div class="ctas aparece d3">
+          <a class="boton primario" href="app/?demo=macul"><svg><use href="#play" /></svg>Ver demo en vivo</a>
+          <a class="boton fantasma" href="#demo">Agenda una demo guiada<svg><use href="#flecha" /></svg></a>
+        </div>
+        <div class="fuentes aparece d3">COPERNICUS DEM · ESA WORLDCOVER · GPEX (TU DELFT)</div>
+      </div>
     </div>
-    <div class="ctl3d-fila" title="Inclinar">
-      <button data-inclinar="-15" aria-label="Ver más desde arriba">▲</button>
-      <span>Inclinar</span>
-      <button data-inclinar="15" aria-label="Ver más de lado">▼</button>
-    </div>
-    <div class="ctl3d-sub">Ver desde el</div>
-    <div class="ctl3d-rosa">
-      <button data-desde="180">N</button>
-      <button data-desde="270">E</button>
-      <button data-desde="0">S</button>
-      <button data-desde="90">O</button>
-    </div>
-    <button id="orbitar" class="ctl3d-ancho">▶ Dar la vuelta</button>
-    <label class="ctl3d-sub" for="exagerar">Relieve ×<b id="exagerar-txt">1,6</b></label>
-    <input id="exagerar" type="range" min="1" max="4" step="0.1" value="1.6" />
-    <button id="centrar3d" class="ctl3d-ancho">◎ Centrar en el terreno</button>
-    <p class="ctl3d-ayuda">También: clic derecho y arrastrar (o Ctrl + arrastrar). En celular, dos dedos.</p>
-  </div>
+  </section>
 
-  <div id="informe" aria-hidden="true"></div>
+  <!-- cifras -->
+  <section class="cifras">
+    <div class="contenedor">
+      <div class="cifra aparece"><b><span data-contar="77.8" data-dec="1">0</span><small>m³/s</small></b><span>bajarían por la Quebrada de Macul con una tormenta de 100 años</span></div>
+      <div class="cifra aparece d1"><b><span data-contar="11.5" data-dec="1">0</span><small>M m³</small></b><span>de agua vuelven a juntarse en la Laguna de Aculeo</span></div>
+      <div class="cifra aparece d2"><b><span data-contar="30" data-dec="0">0</span><small>m</small></b><span>de resolución satelital en todo Chile, o el DEM de tu dron</span></div>
+      <div class="cifra aparece d3"><b>2–<span data-contar="100" data-dec="0">0</span><small>años</small></b><span>tormentas de diseño para el punto exacto de tu terreno</span></div>
+    </div>
+  </section>
 
-  <script type="module" src="app.js"></script>
+  <!-- cómo funciona -->
+  <section class="funciona" id="funciona">
+    <div class="contenedor">
+      <div class="cabeza">
+        <div class="etiqueta aparece">Cómo funciona</div>
+        <h2 class="titulo aparece d1">Del polígono a la tormenta, <em>en cuatro pasos</em></h2>
+      </div>
+      <div class="relato">
+        <div class="pasos">
+          <article class="paso" data-clip="0">
+            <div class="num">01 · DIBUJA</div>
+            <h3>Marca tu terreno</h3>
+            <p>Dibuja el polígono sobre la imagen satelital o sube el modelo de elevación de tu dron o LiDAR. Cualquier lugar de Chile.</p>
+            <div class="chips"><span class="chip">Satélite</span><span class="chip">GeoTIFF de dron</span><span class="chip">UTM / SIRGAS</span></div>
+            <video muted loop playsinline preload="none" poster="assets/clips/paso1.jpg"><source src="assets/clips/paso1.mp4" type="video/mp4" /></video>
+          </article>
+          <article class="paso" data-clip="1">
+            <div class="num">02 · ANALIZA</div>
+            <h3>Gotyx lee el relieve</h3>
+            <p>Descarga el modelo de elevación, rellena depresiones y calcula por dónde corre cada gota y cuánta superficie drena a cada cauce.</p>
+            <div class="chips"><span class="chip">Escorrentía</span><span class="chip">Pendientes</span><span class="chip">Curvas de nivel</span></div>
+            <video muted loop playsinline preload="none" poster="assets/clips/paso2.jpg"><source src="assets/clips/paso2.mp4" type="video/mp4" /></video>
+          </article>
+          <article class="paso" data-clip="2">
+            <div class="num">03 · SIMULA</div>
+            <h3>Lanza una tormenta de diseño</h3>
+            <p>Lluvias extremas de 2 a 100 años para ese punto exacto. Escorrentía, infiltración según el suelo, pozas y caudal en cada cauce.</p>
+            <div class="chips"><span class="chip">T = 2–100 años</span><span class="chip">Caudal m³/s</span><span class="chip">Pozas</span></div>
+            <video muted loop playsinline preload="none" poster="assets/clips/paso3.jpg"><source src="assets/clips/paso3.mp4" type="video/mp4" /></video>
+          </article>
+          <article class="paso" data-clip="3">
+            <div class="num">04 · DECIDE</div>
+            <h3>Míralo en 3D y llévatelo</h3>
+            <p>Relieve, cauces y lluvia en movimiento. Exporta el informe en PDF o los datos en GeoTIFF y GeoJSON para tu equipo.</p>
+            <div class="chips"><span class="chip">Vista 3D</span><span class="chip">Informe PDF</span><span class="chip">GeoTIFF</span></div>
+            <video muted loop playsinline preload="none" poster="assets/clips/paso4.jpg"><source src="assets/clips/paso4.mp4" type="video/mp4" /></video>
+          </article>
+        </div>
+        <div class="pantalla" aria-hidden="true">
+          <div class="marco">
+            <div class="barra"><i></i><i></i><i></i><span id="barra-txt">GOTYX · QUEBRADA DE MACUL</span></div>
+            <video muted loop playsinline preload="auto" class="visible" poster="assets/clips/paso1.jpg"><source src="assets/clips/paso1.mp4" type="video/mp4" /></video>
+            <video muted loop playsinline preload="none" poster="assets/clips/paso2.jpg"><source src="assets/clips/paso2.mp4" type="video/mp4" /></video>
+            <video muted loop playsinline preload="none" poster="assets/clips/paso3.jpg"><source src="assets/clips/paso3.mp4" type="video/mp4" /></video>
+            <video muted loop playsinline preload="none" poster="assets/clips/paso4.jpg"><source src="assets/clips/paso4.mp4" type="video/mp4" /></video>
+            <div class="progreso" id="progreso"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- casos -->
+  <section class="casos" id="casos">
+    <div class="contenedor">
+      <div class="etiqueta aparece">Casos reales</div>
+      <h2 class="titulo aparece d1">Dos lugares, <em>dos preguntas</em></h2>
+      <p class="bajada aparece d2">Ábrelos en la demo: son simulaciones reales, con los mismos datos que usarías para tu terreno.</p>
+      <div class="grilla">
+        <article class="caso aparece">
+          <video muted loop playsinline autoplay preload="none" poster="assets/clips/macul.jpg"><source src="assets/clips/macul.mp4" type="video/mp4" /></video>
+          <div class="lugar"><span class="vivo"></span>Escorrentía · Peñalolén, Santiago</div>
+          <h3>Quebrada de Macul</h3>
+          <p>En 1993 un aluvión bajó por esta quebrada. ¿Cuánta agua bajaría hoy con una tormenta extrema?</p>
+          <div class="grande"><span data-contar="77.8" data-dec="1">0</span><small>m³/s</small></div>
+          <div class="nota">en la salida de la quebrada · 134 mm en 24 h · tormenta de 100 años</div>
+          <a class="boton fantasma" href="app/?demo=macul">Abrir en la demo<svg><use href="#flecha" /></svg></a>
+        </article>
+        <article class="caso aparece d1">
+          <video muted loop playsinline autoplay preload="none" poster="assets/clips/aculeo.jpg"><source src="assets/clips/aculeo.mp4" type="video/mp4" /></video>
+          <div class="lugar"><span class="vivo"></span>Acumulación · Paine, RM</div>
+          <h3>Laguna de Aculeo</h3>
+          <p>Se secó en 2018. ¿Dónde se junta el agua de sus cerros cuando llueve fuerte?</p>
+          <div class="grande"><span data-contar="11.5" data-dec="1">0</span><small>millones de m³</small></div>
+          <div class="nota">vuelven a la cuenca · 160 mm en 24 h · tormenta de 100 años</div>
+          <a class="boton fantasma" href="app/?demo=aculeo">Abrir en la demo<svg><use href="#flecha" /></svg></a>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <!-- para quién -->
+  <section class="quien" id="quien">
+    <div class="contenedor">
+      <div class="etiqueta aparece">Para quién</div>
+      <h2 class="titulo aparece d1">Decisiones sobre el terreno, <em>antes de que llueva</em></h2>
+      <div class="grilla">
+        <article class="tarjeta aparece">
+          <div class="icono"><svg viewBox="0 0 24 24"><path d="M3 21h18M5 21V9l7-5 7 5v12M9 21v-6h6v6" /></svg></div>
+          <h3>Inmobiliarias</h3>
+          <p>Evalúa un terreno antes de comprarlo o lotearlo.</p>
+          <ul><li>Quebradas y cauces que lo cruzan</li><li>Zonas que se anegan</li><li>Agua que llega de los vecinos</li></ul>
+        </article>
+        <article class="tarjeta aparece d1">
+          <div class="icono"><svg viewBox="0 0 24 24"><path d="M12 21V11M12 11c0-4 3-7 7-7 0 4-3 7-7 7ZM12 14c0-3-2.5-5.5-6-5.5 0 3.5 2.5 5.5 6 5.5ZM4 21h16" /></svg></div>
+          <h3>Agrícolas</h3>
+          <p>Planifica drenaje, acumulación y riego por gravedad.</p>
+          <ul><li>Dónde se acumula el agua</li><li>Pendientes por potrero</li><li>Precisión con tu DEM de dron</li></ul>
+        </article>
+        <article class="tarjeta aparece d2">
+          <div class="icono"><svg viewBox="0 0 24 24"><path d="M3 21h18M4 21V10h16v11M2 10l10-6 10 6M8 14v3M12 14v3M16 14v3" /></svg></div>
+          <h3>Municipios</h3>
+          <p>Prioriza quebradas y planes de emergencia.</p>
+          <ul><li>Caudales con tormentas extremas</li><li>Cuencas que llegan a la ciudad</li><li>Informe para el concejo</li></ul>
+        </article>
+        <article class="tarjeta aparece d3">
+          <div class="icono"><svg viewBox="0 0 24 24"><path d="M4 19V5M4 19h16M8 15l3-4 3 2 5-6" /></svg></div>
+          <h3>Consultoras</h3>
+          <p>Prediagnóstico en minutos, antes del estudio de detalle.</p>
+          <ul><li>Escenarios de 2 a 100 años</li><li>GeoTIFF y GeoJSON</li><li>Para tu SIG de siempre</li></ul>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <!-- datos -->
+  <section class="datos" id="datos">
+    <div class="contenedor">
+      <div>
+        <div class="etiqueta aparece">Datos y método</div>
+        <h2 class="titulo aparece d1">Datos abiertos, <em>métodos de ingeniería</em></h2>
+        <p class="bajada aparece d2">Nada de cajas negras: cada resultado viene de fuentes públicas y métodos hidrológicos estándar, explicados en el informe.</p>
+        <p class="aviso-metodo aparece d3">Gotyx es una herramienta de prediagnóstico: no reemplaza un levantamiento topográfico ni un estudio hidrológico de detalle.</p>
+      </div>
+      <div class="capas">
+        <div class="capa aparece"><span class="n">01</span><div><b>Relieve</b><span>Copernicus GLO-30 en todo Chile, o tu DEM de dron o LiDAR</span></div><em>30 m · cm</em></div>
+        <div class="capa aparece d1"><span class="n">02</span><div><b>Lluvias extremas</b><span>GPEX (TU Delft): 3 h a 3 días, períodos de 2 a 100 años</span></div><em>0,1°</em></div>
+        <div class="capa aparece d2"><span class="n">03</span><div><b>Cobertura del suelo</b><span>ESA WorldCover 2021 y número de curva SCS por tipo de suelo</span></div><em>10 m</em></div>
+        <div class="capa aparece d3"><span class="n">04</span><div><b>Hidrología</b><span>Flujo D8, llenado y desborde de pozas, método racional</span></div><em>estándar</em></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- cómo empezar -->
+  <section class="empezar">
+    <div class="contenedor">
+      <div class="etiqueta aparece">Cómo empezar</div>
+      <h2 class="titulo aparece d1">De la demo a <em>tu propio terreno</em></h2>
+      <div class="ruta">
+        <div class="hito aparece"><div class="punto">1</div><h3>Mira la demo</h3><p>Abierta y sin registro: explora los casos de Macul y Aculeo.</p><a href="app/?demo=macul">Abrir demo →</a></div>
+        <div class="hito aparece d1"><div class="punto">2</div><h3>Agenda una demo guiada</h3><p>30 minutos por videollamada, con un terreno tuyo.</p><a href="#demo">Agendar →</a></div>
+        <div class="hito aparece d2"><div class="punto">3</div><h3>Recibe tu cuenta</h3><p>Te creamos un acceso con correo y clave para tu equipo.</p></div>
+        <div class="hito aparece d3"><div class="punto">4</div><h3>Analiza tus terrenos</h3><p>Dibuja, simula y exporta todos los que necesites durante el piloto.</p><a href="ingresar.html">Ingresar →</a></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- preguntas frecuentes -->
+  <section class="faq" id="preguntas">
+    <div class="contenedor">
+      <div class="etiqueta aparece">Preguntas frecuentes</div>
+      <h2 class="titulo aparece d1">Lo que nos <em>preguntan</em></h2>
+      <div class="lista-faq">
+        <details class="aparece"><summary>¿Qué es Gotyx?</summary><p>Una plataforma web de simulación hidrológica: dibujas un terreno en cualquier lugar de Chile y ves por dónde escurre el agua lluvia, dónde se acumula, cuánto caudal baja por cada quebrada y cómo cambia con tormentas de 2 a 100 años de período de retorno.</p></details>
+        <details class="aparece"><summary>¿Sirve para evaluar el riesgo de inundación o anegamiento de un terreno?</summary><p>Sí, como prediagnóstico. Muestra las zonas que se anegan, las quebradas que cruzan el terreno y el agua que llega desde los predios vecinos. Para un proyecto de ingeniería se complementa con un levantamiento topográfico y un estudio hidrológico de detalle.</p></details>
+        <details class="aparece"><summary>¿De dónde salen los datos de lluvia y de relieve?</summary><p>El relieve viene del modelo satelital Copernicus GLO-30 (30 m) o del DEM de tu dron o LiDAR. Las lluvias extremas, de GPEX (TU Delft), y la cobertura del suelo, de ESA WorldCover. Con eso se calculan la escorrentía (número de curva SCS) y los caudales (método racional).</p></details>
+        <details class="aparece"><summary>¿Funciona en cualquier región de Chile?</summary><p>Sí, desde Arica hasta Magallanes. En el norte desértico hay menos registros de lluvias extremas, y la plataforma lo indica cuando ocurre.</p></details>
+        <details class="aparece"><summary>¿Puedo usar el modelo de elevación de mi dron?</summary><p>Sí. Subes un GeoTIFF en UTM (WGS84 o SIRGAS) y el análisis se hace con su resolución, ideal para drenaje agrícola o nivelación de potreros.</p></details>
+        <details class="aparece"><summary>¿Cuánto cuesta?</summary><p>La demo es abierta y gratis. Para analizar tus propios terrenos, agenda una demo guiada y te creamos una cuenta para el piloto.</p></details>
+      </div>
+    </div>
+  </section>
+
+  <!-- formulario de demo -->
+  <section class="demo" id="demo">
+    <div class="contenedor">
+      <div>
+        <div class="etiqueta aparece">Demo guiada</div>
+        <h2 class="titulo aparece d1">Te mostramos <em>tu terreno</em> en 30 minutos</h2>
+        <p class="bajada aparece d2">Cuéntanos qué terreno o zona te interesa y lo simulamos contigo en vivo.</p>
+        <ul class="incluye">
+          <li class="aparece"><svg><use href="#check" /></svg><span><b>Tu terreno, no un ejemplo:</b> escorrentía, pozas y caudal con tormentas de 2 a 100 años.</span></li>
+          <li class="aparece d1"><svg><use href="#check" /></svg><span><b>Informe incluido:</b> te llevas el PDF y los datos de la simulación.</span></li>
+          <li class="aparece d2"><svg><use href="#check" /></svg><span><b>Acceso al piloto:</b> si te sirve, te creamos una cuenta para tu equipo.</span></li>
+        </ul>
+      </div>
+      <div class="formulario aparece d1" id="caja-form">
+        <form id="form-demo" novalidate>
+          <h3>Agenda tu demo</h3>
+          <p>Te respondemos en menos de 24 horas hábiles.</p>
+          <div class="campos">
+            <div class="campo"><label for="f-nombre">Nombre</label><input id="f-nombre" name="nombre" autocomplete="name" required /></div>
+            <div class="campo"><label for="f-empresa">Empresa o institución</label><input id="f-empresa" name="empresa" autocomplete="organization" required /></div>
+            <div class="campo"><label for="f-correo">Correo</label><input id="f-correo" name="correo" type="email" autocomplete="email" required /></div>
+            <div class="campo"><label for="f-fono">Teléfono <small>(opcional)</small></label><input id="f-fono" name="telefono" type="tel" autocomplete="tel" /></div>
+            <div class="campo ancho"><label for="f-rubro">Rubro</label>
+              <select id="f-rubro" name="rubro" required>
+                <option value="">Elige uno…</option><option>Inmobiliaria</option><option>Agrícola</option><option>Municipio o gobierno</option><option>Consultora</option><option>Otro</option>
+              </select>
+            </div>
+            <div class="campo ancho"><label for="f-terreno">¿Qué terreno o zona te interesa?</label><textarea id="f-terreno" name="mensaje" placeholder="Ej.: un loteo de 40 ha en Colina que tiene una quebrada"></textarea></div>
+          </div>
+          <label class="consentimiento"><input type="checkbox" id="f-ok" required /><span>Acepto que Gotyx use estos datos solo para contactarme sobre la demo. No los compartimos con terceros y puedes pedir que los borremos cuando quieras (Ley 21.719).</span></label>
+          <button class="boton primario" type="submit">Agendar demo<svg><use href="#flecha" /></svg></button>
+          <div class="estado" id="estado-form" role="status"></div>
+        </form>
+        <div class="exito">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" /><path d="m7.5 12.5 3 3 6-6" /></svg>
+          <h3>¡Listo! Te escribiremos pronto</h3>
+          <p>Mientras tanto, explora la demo con los casos reales.</p>
+          <a class="boton primario" href="app/?demo=aculeo"><svg><use href="#play" /></svg>Abrir la demo</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <footer class="pie">
+    <div class="contenedor">
+      <div><a class="logo" href="#"><svg><use href="#gota" /></svg><span>Got<i>yx</i></span></a><p>Simulación hidrológica para cualquier terreno de Chile. Hecho en Chile.</p></div>
+      <nav><a href="#funciona">Cómo funciona</a><a href="#casos">Casos</a><a href="app/?demo=macul">Demo</a><a href="#demo">Contacto</a><a href="ingresar.html">Ingresar</a></nav>
+      <div class="creditos">Relieve: Copernicus DEM © DLR / Airbus, ESA · Lluvias: GPEX, Gründemann et al. (CC BY 4.0) · Cobertura: ESA WorldCover 2021 (CC BY 4.0) · Imágenes: Esri, Maxar, Earthstar Geographics</div>
+    </div>
+  </footer>
+
+  <script src="assets/landing.js"></script>
 </body>
 </html>

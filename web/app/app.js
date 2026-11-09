@@ -585,7 +585,7 @@ $("b-geojson").onclick = () => {
     escorrentia_m3: Math.round(t.stats.genera), infiltracion_m3: Math.round(t.stats.infiltra), pozas_m3: Math.round(t.stats.enCharcos),
     sale_m3: Math.round(t.stats.sale), caudal_max_m3s: +t.stats.qMax.toFixed(3) });
   const fc = { type: "FeatureCollection", features: [{ type: "Feature", properties: props, geometry: { type: "Polygon", coordinates: [contorno()] } }] };
-  descargar("gota_terreno.geojson", JSON.stringify(fc, null, 1), "application/geo+json");
+  descargar("gotyx_terreno.geojson", JSON.stringify(fc, null, 1), "application/geo+json");
 };
 
 $("b-tif").onclick = async () => {
@@ -602,7 +602,7 @@ $("b-tif").onclick = async () => {
   const epsg = Number(crs.split(":")[1]);
   try {
     const buf = geotiffFloat32(vals, w, h, { epsg, x0, y0, rx, ry });
-    descargar(`gota_${nombre}.tif`, new Blob([buf], { type: "image/tiff" }));
+    descargar(`gotyx_${nombre}.tif`, new Blob([buf], { type: "image/tiff" }));
   } catch (err) {
     console.error(err);
     estado("No pude generar el GeoTIFF: " + err.message, true);
@@ -623,7 +623,7 @@ $("b-informe").onclick = () => {
   const fila = (a, b) => `<tr><td>${a}</td><td>${b}</td></tr>`;
   $("informe").innerHTML = `
     <h1>Informe de terreno</h1>
-    <p class="meta">Generado con Gota.ai el ${new Date().toLocaleDateString("es-CL", { dateStyle: "long" })} · centro aprox. ${fmt(lat, 5)}, ${fmt(lon, 5)} · fuente: ${g.fuente} · celda ${fmt(g.dx, 1)} × ${fmt(g.dy, 1)} m</p>
+    <p class="meta">Generado con Gotyx el ${new Date().toLocaleDateString("es-CL", { dateStyle: "long" })} · centro aprox. ${fmt(lat, 5)}, ${fmt(lon, 5)} · fuente: ${g.fuente} · celda ${fmt(g.dx, 1)} × ${fmt(g.dy, 1)} m</p>
     <img src="${img}" alt="Mapa del terreno" />
     <h2>Terreno</h2>
     <table>${fila("Superficie", ha(st.area))}${fila("Cota mínima / máxima", `${fmt(st.zmin, 1)} / ${fmt(st.zmax, 1)} m s.n.m.`)}${fila("Desnivel", `${fmt(st.zmax - st.zmin, 1)} m`)}${fila("Pendiente media", `${fmt(st.pendMedia, 1)} %`)}</table>
@@ -638,3 +638,45 @@ $("b-informe").onclick = () => {
 
 // ---------- panel plegable (celular) ----------
 $("plegar").onclick = () => $("panel").classList.toggle("plegado");
+
+// ---------- modo demo (?demo=macul | ?demo=aculeo): casos precargados, sin dibujar terrenos propios ----------
+const DEMOS = {
+  macul: { nombre: "Quebrada de Macul · Peñalolén", anillo: [[-70.528, -33.47], [-70.46, -33.468], [-70.458, -33.53], [-70.53, -33.532]], capa: "escurrimiento", exagerar: 1.4 },
+  aculeo: { nombre: "Laguna de Aculeo · Paine", anillo: [[-70.975, -33.805], [-70.855, -33.80], [-70.85, -33.885], [-70.97, -33.89]], capa: "encharcamiento", exagerar: 2.2 },
+};
+const demo = DEMOS[params.get("demo")];
+if (demo) {
+  document.body.classList.add("modo-demo");
+  const aviso = document.createElement("div");
+  aviso.className = "demo-aviso";
+  aviso.innerHTML = `<span><b>Demo</b> · ${demo.nombre}</span>
+    <a href="../#demo">Analiza tu terreno → agenda una demo</a>`;
+  document.body.append(aviso);
+  const cambiar = document.createElement("p");
+  cambiar.className = "ayuda demo-casos";
+  cambiar.innerHTML = `Casos de la demo: <a href="?demo=macul">Quebrada de Macul</a> · <a href="?demo=aculeo">Laguna de Aculeo</a>`;
+  document.querySelector("#paso-terreno .botones").replaceWith(cambiar);
+  $("buscar").hidden = true;
+
+  const esperarQue = (cond) => new Promise((ok) => { const t = setInterval(() => { if (cond()) { clearInterval(t); ok(); } }, 150); });
+  const correrDemo = async () => {
+    E.anillo = [...demo.anillo, demo.anillo[0]];
+    dibujarPoligono();
+    $("info-poligono").hidden = false;
+    $("info-poligono").innerHTML = `Polígono de <b>${ha(areaAnillo(E.anillo))}</b> · caso de demostración`;
+    const xs = demo.anillo.map((p) => p[0]), ys = demo.anillo.map((p) => p[1]);
+    const celular = innerWidth <= 720;
+    if (celular) $("panel").classList.add("plegado");
+    mapa.fitBounds([[Math.min(...xs), Math.min(...ys)], [Math.max(...xs), Math.max(...ys)]], { padding: { left: celular ? 20 : 400, right: celular ? 20 : 40, top: 70, bottom: celular ? 90 : 60 }, duration: 0 });
+    actualizarBotonAnalizar();
+    $("b-analizar").click();
+    await esperarQue(() => E.an && !$("paso-tormenta").hidden && E.lluvias);
+    E.T = 100; mostrarIDF();
+    await simularTormenta();
+    elegirCapa(demo.capa);
+    $("exagerar").value = demo.exagerar; $("exagerar").dispatchEvent(new Event("input"));
+    $("t-3d").checked = true; alternar3D(true);
+    $("t-lluvia").checked = true; iniciarLluvia();
+  };
+  if (mapa.loaded()) correrDemo(); else mapa.once("load", correrDemo);
+}

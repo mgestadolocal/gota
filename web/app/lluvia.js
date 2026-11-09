@@ -15,9 +15,11 @@ async function tesela(la, lo) {
   return cache.get(n);
 }
 
-// Precipitación (mm) por período de retorno y duración en el punto, desde la celda con datos más cercana.
+// Precipitación (mm) por período de retorno y duración en el punto: promedio ponderado por distancia (1/d²)
+// de las 4 celdas con datos más cercanas. Así el resultado no salta al cruzar el borde entre celdas de 0,1°.
 export async function lluviasDiseno(lon, lat) {
-  let mejor = null, dmin = Infinity;
+  const cand = [];
+  const kx = Math.cos((lat * Math.PI) / 180);
   for (let dla = -1; dla <= 1; dla++) {
     for (let dlo = -1; dlo <= 1; dlo++) {
       const la = Math.floor(lat) + dla, lo = Math.floor(lon) + dlo;
@@ -25,18 +27,24 @@ export async function lluviasDiseno(lon, lat) {
       if (!t) continue;
       for (let r = 0; r < 10; r++) for (let c = 0; c < 10; c++) {
         const cy = la + 1 - 0.05 - 0.1 * r, cx = lo + 0.05 + 0.1 * c;
-        const dist = Math.hypot((cx - lon) * Math.cos((lat * Math.PI) / 180), cy - lat);
-        if (dist >= dmin || dist > 0.3) continue;
+        const dist = Math.hypot((cx - lon) * kx, cy - lat);
+        if (dist > 0.25) continue;
         const base = (r * 10 + c) * NV;
         if (t[base] === 0xffff) continue;
-        dmin = dist; mejor = t.subarray(base, base + NV);
+        cand.push({ dist, v: t.subarray(base, base + NV) });
       }
     }
   }
-  if (!mejor) return null;
+  if (!cand.length) return null;
+  cand.sort((a, b) => a.dist - b.dist);
+  const usar = cand.slice(0, 4);
+  const pesos = usar.map((c) => 1 / Math.max(1e-6, c.dist) ** 2);
+  const suma = pesos.reduce((s, w) => s + w, 0);
+  const prom = new Float64Array(NV);
+  usar.forEach((c, k) => { for (let j = 0; j < NV; j++) prom[j] += (pesos[k] / suma) * (c.v[j] / 10); });
   const P = {};
-  RETORNOS.forEach((T, k) => { P[T] = DURACIONES.map((_, j) => mejor[k * DURACIONES.length + j] / 10); });
-  return { P, distanciaKm: dmin * 111.32 };
+  RETORNOS.forEach((T, k) => { P[T] = DURACIONES.map((_, j) => prom[k * DURACIONES.length + j]); });
+  return { P, distanciaKm: usar[0].dist * 111.32 };
 }
 
 // Ajuste P(D) = a·D^n (D en horas) con las duraciones de 3 a 24 h, para interpolar o extrapolar a duraciones cortas.

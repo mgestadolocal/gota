@@ -28,7 +28,7 @@ jobs:
           API: ${{ vars.GOTA_API }}
         run: |
           if [ -n "$API" ]; then
-            printf 'window.GOTA_API = "%s";\n' "$API" > web/config.js
+            printf 'window.GOTA_API = "%s";\n' "$API" > web/app/config.js
           fi
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
