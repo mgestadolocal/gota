@@ -70,9 +70,10 @@
           <div class="campo"><label for="c-empresa">Empresa</label><input id="c-empresa" /></div>
           <button class="boton primario" id="crear">Crear cuenta</button>
         </div>
+        <label style="display:flex;gap:10px;align-items:center;color:var(--suave);font-size:14px;margin:-6px 0 16px"><input type="checkbox" id="enviar" checked style="width:18px;height:18px;accent-color:var(--agua)" /> Enviar la invitación por correo al cliente (desde hola@gotyx.cl)</label>
         <div class="msj" id="msj-cuentas"></div>
         <div class="resultado" id="resultado">
-          <b>Cuenta lista. Copia la clave ahora: no se vuelve a mostrar.</b>
+          <b id="res-titulo">Cuenta lista. Copia la clave ahora: no se vuelve a mostrar.</b>
           <pre id="invitacion"></pre>
           <button class="mini" id="copiar">Copiar mensaje de invitación</button>
         </div>
@@ -123,7 +124,10 @@
           <button class="mini rojo" data-borrar-cuenta="${esc(u.id)}">Eliminar</button>
         </div></td></tr>`).join("");
     }
-    function mostrarInvitacion(correo, nombre, clave) {
+    function mostrarInvitacion(correo, nombre, clave, r = {}) {
+      $("res-titulo").textContent = r.correoEnviado
+        ? `✓ Invitación enviada por correo a ${correo}. Igual te dejamos la clave por si la necesitas:`
+        : (r.motivo ? `No se pudo enviar el correo (${r.motivo}). Copia la clave y envíasela tú: no se vuelve a mostrar.` : "Cuenta lista. Copia la clave ahora: no se vuelve a mostrar.");
       const url = new URL("ingresar.html", location.href).href;
       $("invitacion").textContent = `Hola${nombre ? " " + nombre.split(" ")[0] : ""}, te creamos tu cuenta en Gotyx:\n\nIngresa en: ${url}\nCorreo: ${correo}\nClave: ${clave}\n\nCualquier duda, responde este correo.`;
       $("resultado").classList.add("on");
@@ -132,8 +136,8 @@
     async function crearCuenta(correo, nombre, empresa) {
       $("msj-cuentas").textContent = "";
       try {
-        const r = await api("/admin/usuarios", "POST", { correo, nombre, empresa });
-        mostrarInvitacion(r.correo, nombre, r.clave);
+        const r = await api("/admin/usuarios", "POST", { correo, nombre, empresa, enviar: $("enviar").checked, url: new URL("ingresar.html", location.href).href });
+        mostrarInvitacion(r.correo, nombre, r.clave, r);
         await cargarCuentas();
       } catch (e) { $("msj-cuentas").textContent = e.message; }
     }
@@ -169,8 +173,8 @@
           await api("/admin/demos/estado", "POST", { id: b.dataset.estado, estado: b.dataset.valor }); await cargarDemos();
         } else if (b.dataset.clave) {
           if (!confirm(`¿Generar una clave nueva para ${b.dataset.clave}? La anterior deja de funcionar.`)) return;
-          const r = await api("/admin/usuarios/clave", "POST", { correo: b.dataset.clave });
-          mostrarInvitacion(r.correo, "", r.clave);
+          const r = await api("/admin/usuarios/clave", "POST", { correo: b.dataset.clave, enviar: $("enviar").checked, url: new URL("ingresar.html", location.href).href });
+          mostrarInvitacion(r.correo, "", r.clave, r);
         } else if (b.dataset.borrarDemo) {
           if (!confirm(`¿Eliminar la solicitud de ${b.dataset.nombre}? No se puede deshacer.`)) return;
           await api("/admin/demos/borrar", "POST", { id: b.dataset.borrarDemo }); b.closest("tr").remove();

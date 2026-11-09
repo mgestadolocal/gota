@@ -101,6 +101,43 @@ async function datos(req, env, cors, fuente, nombre) {
   return new Response(arriba.body, { status: arriba.status, headers: h });
 }
 
+// ---------- correo (Resend) ----------
+const REMITENTE = (env) => env.AVISO_DESDE || "Gotyx <hola@gotyx.cl>";
+async function enviarCorreo(env, { to, subject, text, html, reply_to }) {
+  if (!env.RESEND_API_KEY) return { ok: false, motivo: "sin RESEND_API_KEY" };
+  try {
+    const r = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${env.RESEND_API_KEY}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ from: REMITENTE(env), to: [to], subject, text, html, ...(reply_to ? { reply_to } : {}) }),
+    });
+    return { ok: r.ok, motivo: r.ok ? "" : `Resend ${r.status}: ${(await r.text()).slice(0, 200)}` };
+  } catch (e) {
+    return { ok: false, motivo: String(e) };
+  }
+}
+const escHtml = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+function correoInvitacion({ nombre, correo, clave, url, nueva }) {
+  const saludo = nombre ? `Hola ${nombre.split(" ")[0]}` : "Hola";
+  const intro = nueva ? "Generamos una clave nueva para tu cuenta de Gotyx." : "Te creamos tu cuenta en Gotyx, la plataforma de simulación hidrológica para terrenos en Chile.";
+  const text = `${saludo},\n\n${intro}\n\nIngresa en: ${url}\nCorreo: ${correo}\nClave: ${clave}\n\nTe recomendamos guardar la clave en tu gestor de contraseñas.\nCualquier duda, responde este correo.\n\nEquipo Gotyx\nhttps://gotyx.cl`;
+  const html = `<!doctype html><html><body style="margin:0;background:#050e16;padding:32px 12px;font-family:Arial,Helvetica,sans-serif">
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0"><tr><td align="center">
+<table role="presentation" width="560" cellspacing="0" cellpadding="0" style="max-width:560px;background:#0a1c29;border:1px solid #1d3a4f;border-radius:18px">
+<tr><td style="padding:32px 34px 8px"><span style="font-size:24px;font-weight:800;color:#eaf6ff">Got<span style="color:#5cc8ff">yx</span></span></td></tr>
+<tr><td style="padding:8px 34px 0;color:#eaf6ff;font-size:16px;line-height:1.6">
+<p style="margin:0 0 14px">${escHtml(saludo)},</p><p style="margin:0 0 22px;color:#b5cbd8">${escHtml(intro)}</p>
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#06131d;border:1px solid #1d3a4f;border-radius:12px">
+<tr><td style="padding:16px 18px;font-family:Consolas,Menlo,monospace;font-size:14px;line-height:1.9;color:#eaf6ff">
+<span style="color:#8fb0c4">Correo</span>&nbsp; ${escHtml(correo)}<br><span style="color:#8fb0c4">Clave</span>&nbsp;&nbsp; <b style="color:#8ff0ff">${escHtml(clave)}</b></td></tr></table>
+<p style="margin:26px 0"><a href="${escHtml(url)}" style="background:#5cc8ff;color:#050e16;text-decoration:none;font-weight:800;padding:14px 24px;border-radius:12px;display:inline-block">Ingresar a Gotyx →</a></p>
+<p style="margin:0 0 28px;color:#8fb0c4;font-size:14px">Te recomendamos guardar la clave en tu gestor de contraseñas. Si tienes dudas, responde este correo.</p>
+</td></tr>
+<tr><td style="padding:18px 34px 26px;border-top:1px solid #1d3a4f;color:#5f7d90;font-size:12px">Gotyx · Simulación hidrológica para cualquier terreno de Chile · <a href="https://gotyx.cl" style="color:#5cc8ff">gotyx.cl</a></td></tr>
+</table></td></tr></table></body></html>`;
+  return { text, html };
+}
+
 // ---------- solicitudes de demo ----------
 async function demo(req, env, cors) {
   const b = await cuerpo(req);
@@ -115,15 +152,9 @@ async function demo(req, env, cors) {
   if (!(await limitar(env, `demo:${ipDe(req)}`, 5, 3600))) return json({ error: "Demasiadas solicitudes. Intenta más tarde." }, 429, cors);
   const id = `${Date.now()}-${azar(4)}`;
   await env.DATOS.put(`demo:${id}`, JSON.stringify(d));
-  if (env.RESEND_API_KEY && env.AVISO_CORREO) {
-    const texto = `Nueva solicitud de demo en Gotyx\n\nNombre: ${d.nombre}\nEmpresa: ${d.empresa}\nRubro: ${d.rubro}\nCorreo: ${d.correo}\nTeléfono: ${d.telefono || "—"}\n\nTerreno o zona:\n${d.mensaje || "—"}\n\nFecha: ${d.fecha}`;
-    try {
-      await fetch("https://api.resend.com/emails", {
-        method: "POST",
-        headers: { Authorization: `Bearer ${env.RESEND_API_KEY}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ from: env.AVISO_DESDE || "Gotyx <onboarding@resend.dev>", to: [env.AVISO_CORREO], reply_to: d.correo, subject: `Demo Gotyx: ${d.empresa} (${d.rubro})`, text: texto }),
-      });
-    } catch { /* la solicitud ya quedó guardada */ }
+  if (env.AVISO_CORREO) {
+    const texto = `Nueva solicitud de demo en Gotyx\n\nNombre: ${d.nombre}\nEmpresa: ${d.empresa}\nRubro: ${d.rubro}\nCorreo: ${d.correo}\nTeléfono: ${d.telefono || "—"}\n\nTerreno o zona:\n${d.mensaje || "—"}\n\nFecha: ${d.fecha}\n\nVer y crear su cuenta: https://gotyx.cl/admin.html`;
+    await enviarCorreo(env, { to: env.AVISO_CORREO, reply_to: d.correo, subject: `Demo Gotyx: ${d.empresa} (${d.rubro})`, text: texto });
   }
   return json({ ok: true }, 200, cors);
 }
@@ -209,7 +240,15 @@ async function admin(req, env, cors, ruta) {
       sal, iter: ITER, hash: await pbkdf2(clave, sal),
     };
     await env.DATOS.put(`usuario:${correo}`, JSON.stringify(u));
-    return json({ correo, clave }, 200, cors);
+    let correoEnviado = false, motivo = "";
+    if (b.enviar) {
+      const url = limpiar(b.url, 200) || "https://gotyx.cl/ingresar.html";
+      const nueva = ruta === "/admin/usuarios/clave";
+      const { text, html } = correoInvitacion({ nombre: u.nombre, correo, clave, url, nueva });
+      const env1 = await enviarCorreo(env, { to: correo, subject: nueva ? "Tu nueva clave de Gotyx" : "Tu cuenta de Gotyx está lista", text, html, reply_to: "hola@gotyx.cl" });
+      correoEnviado = env1.ok; motivo = env1.motivo;
+    }
+    return json({ correo, clave, correoEnviado, motivo }, 200, cors);
   }
   if (ruta === "/admin/usuarios/estado" && req.method === "POST") {
     const b = await cuerpo(req);
