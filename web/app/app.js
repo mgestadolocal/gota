@@ -8,6 +8,30 @@ import { lluviasDiseno, ajusteIDF, numerosCurva, SUELOS } from "./lluvia.js";
 const params = new URLSearchParams(location.search);
 const API = (params.get("api") || window.GOTA_API || location.origin).replace(/\/$/, "");
 const $ = (id) => document.getElementById(id);
+
+// ---------- sesión (cuentas por invitación) ----------
+// Sin ?demo= hace falta haber ingresado; si no, se envía a la pantalla de acceso.
+const TOKEN = (() => { try { return localStorage.getItem("gotyx-sesion"); } catch { return null; } })();
+const MODO_DEMO = ["macul", "aculeo"].includes(params.get("demo"));
+if (TOKEN) window.__gotyxAuth = { Authorization: `Bearer ${TOKEN}` };
+if (!MODO_DEMO && !TOKEN) location.replace("../ingresar.html");
+async function salir() {
+  try { await fetch(`${API}/auth/logout`, { method: "POST", headers: window.__gotyxAuth || {} }); } catch {}
+  try { localStorage.removeItem("gotyx-sesion"); } catch {}
+  location.href = "../ingresar.html";
+}
+if (TOKEN && !MODO_DEMO) {
+  fetch(`${API}/auth/yo`, { headers: window.__gotyxAuth }).then(async (r) => {
+    if (r.status === 401) { try { localStorage.removeItem("gotyx-sesion"); } catch {} location.replace("../ingresar.html"); return; }
+    if (!r.ok) return;
+    const u = await r.json();
+    const chip = document.createElement("div");
+    chip.className = "usuario";
+    chip.innerHTML = `<span title="${u.correo}">${(u.nombre || u.correo).replace(/[<>&]/g, "")}${u.empresa ? ` · ${u.empresa.replace(/[<>&]/g, "")}` : ""}</span><button type="button">Salir</button>`;
+    chip.querySelector("button").onclick = salir;
+    document.querySelector("#panel .marca").after(chip);
+  }).catch(() => {});
+}
 const fmt = (v, d = 0) => Number(v).toLocaleString("es-CL", { maximumFractionDigits: d, minimumFractionDigits: d });
 const ha = (m2) => (m2 >= 100000 ? fmt(m2 / 10000, 0) : fmt(m2 / 10000, m2 >= 10000 ? 1 : 2)) + " ha";
 const m3 = (v) => fmt(Math.round(v)) + " m³";

@@ -9,23 +9,47 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
     steps:
       - uses: actions/checkout@v4
       - name: Revisar credenciales
         id: cred
-        env:
-          TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: |
-          if [ -z "$TOKEN" ]; then
+          if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
             echo "Falta el secreto CLOUDFLARE_API_TOKEN; no se publica el Worker." >> "$GITHUB_STEP_SUMMARY"
             echo "ok=false" >> "$GITHUB_OUTPUT"
           else
             echo "ok=true" >> "$GITHUB_OUTPUT"
           fi
-      - uses: cloudflare/wrangler-action@v3
+      - uses: actions/setup-node@v4
         if: steps.cred.outputs.ok == 'true'
         with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          workingDirectory: worker
-          command: deploy --var ALLOWED_ORIGINS:${{ vars.ALLOWED_ORIGINS || '*' }}
+          node-version: 20
+      - name: Base de datos KV (se crea la primera vez)
+        if: steps.cred.outputs.ok == 'true'
+        working-directory: worker
+        run: |
+          buscar() { npx -y wrangler@3 kv namespace list 2>/dev/null | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{try{const l=JSON.parse(s);const n=l.find(x=>x.title.endsWith('gotyx-datos'));console.log(n?n.id:'')}catch(e){console.log('')}})"; }
+          ID=$(buscar)
+          if [ -z "$ID" ]; then
+            npx -y wrangler@3 kv namespace create gotyx-datos
+            ID=$(buscar)
+          fi
+          if [ -z "$ID" ]; then echo "No se pudo obtener el KV"; exit 1; fi
+          printf '\n[[kv_namespaces]]\nbinding = "DATOS"\nid = "%s"\n' "$ID" >> wrangler.toml
+          echo "KV DATOS = $ID"
+      - name: Publicar Worker
+        if: steps.cred.outputs.ok == 'true'
+        working-directory: worker
+        env:
+          ADMIN_KEY: ${{ secrets.ADMIN_KEY }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          AVISO_CORREO: ${{ secrets.AVISO_CORREO }}
+        run: |
+          npx -y wrangler@3 deploy --var "ALLOWED_ORIGINS:${{ vars.ALLOWED_ORIGINS || '*' }}"
+          for s in ADMIN_KEY RESEND_API_KEY AVISO_CORREO; do
+            v="${!s}"
+            if [ -n "$v" ]; then printf '%s' "$v" | npx -y wrangler@3 secret put "$s"; fi
+          done

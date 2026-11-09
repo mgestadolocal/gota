@@ -49,6 +49,12 @@
   <script>
     const API = (window.GOTA_API || "").replace(/\/$/, "");
     const f = document.getElementById("form-acceso"), est = document.getElementById("estado-acceso");
+    // si ya hay una sesión válida, directo a la app
+    (async () => {
+      let t = null; try { t = localStorage.getItem("gotyx-sesion"); } catch {}
+      if (!t) return;
+      try { const r = await fetch(`${API}/auth/yo`, { headers: { Authorization: `Bearer ${t}` } }); if (r.ok) location.replace("app/"); } catch {}
+    })();
     f.addEventListener("submit", async (e) => {
       e.preventDefault(); est.textContent = "";
       const correo = document.getElementById("a-correo").value.trim(), clave = document.getElementById("a-clave").value;
@@ -57,6 +63,8 @@
       try {
         const r = await fetch(`${API}/auth/login`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ correo, clave }) });
         if (r.status === 401) throw new Error("Correo o clave incorrectos.");
+        if (r.status === 429) throw new Error("Correo o clave: demasiados intentos. Espera 15 minutos.");
+        if (r.status === 403) throw new Error("Correo o clave: tu cuenta está desactivada. Escríbenos.");
         if (!r.ok) throw new Error("El acceso de clientes aún no está habilitado. Agenda una demo y te creamos tu cuenta.");
         const { token } = await r.json();
         try { localStorage.setItem("gotyx-sesion", token); } catch {}

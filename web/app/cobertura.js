@@ -1,6 +1,6 @@
 // Cobertura de suelo ESA WorldCover 2021 (10 m, CC BY 4.0) muestreada en el centro de cada celda de la grilla.
 /* global GeoTIFF */
-import { afin } from "./dem.js";
+import { afin, auth } from "./dem.js";
 
 export const CLASES_WC = {
   10: { nombre: "Árboles", color: "#006400" },
@@ -44,13 +44,13 @@ export async function cargarCobertura(api, g, avisar = () => {}) {
     const [la, lo] = teselas[t];
     avisar(`Leyendo cobertura de suelo ${t + 1}/${teselas.length}…`);
     const url = `${api}/wc/${nombreTesela(la, lo)}`;
-    const prueba = await fetch(url, { headers: { Range: "bytes=0-0" } });
+    const prueba = await fetch(url, { headers: { Range: "bytes=0-0", ...auth() } });
     if (!prueba.ok) continue; // tesela inexistente (mar)
     const caja = [Math.max(a, lo), Math.max(b, la), Math.min(c, lo + 3), Math.min(d, la + 3)];
     if (caja[2] <= caja[0] || caja[3] <= caja[1]) continue;
     const ancho = Math.max(1, Math.ceil((caja[2] - caja[0]) / res));
     const alto = Math.max(1, Math.ceil((caja[3] - caja[1]) / res));
-    const tiff = await GeoTIFF.fromUrl(url, { allowFullFile: false, maxRanges: 0 });
+    const tiff = await GeoTIFF.fromUrl(url, { allowFullFile: false, maxRanges: 0, headers: auth() });
     const [banda] = await tiff.readRasters({ bbox: caja, width: ancho, height: alto, resampleMethod: "nearest" });
     const rx = (caja[2] - caja[0]) / ancho, ry = (caja[3] - caja[1]) / alto;
     for (let i = 0; i < w * h; i++) {

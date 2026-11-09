@@ -5,6 +5,8 @@
 /* global GeoTIFF, proj4 */
 
 const MAX_CELDAS = 4_000_000;
+// cabecera de sesión (la define app.js al iniciar sesión)
+export const auth = () => window.__gotyxAuth || {};
 const R_TIERRA = 111_320; // m por grado (aprox.)
 
 // ---------- sistemas de referencia ----------
@@ -141,11 +143,12 @@ export async function cargarCopernicus(api, anillo, avisar = () => {}) {
     const nombre = nombreTesela(la, lo);
     avisar(`Descargando Copernicus ${t + 1}/${teselas.length}…`);
     const url = `${api}/cop/${nombre}`;
-    const prueba = await fetch(url, { headers: { Range: "bytes=0-0" } });
+    const prueba = await fetch(url, { headers: { Range: "bytes=0-0", ...auth() } });
     if (prueba.status === 404) continue; // mar abierto
+    if (prueba.status === 401) throw new Error("Para analizar este lugar necesitas una cuenta. Ingresa o agenda una demo.");
     if (!prueba.ok) throw new Error(`El servidor de elevación respondió ${prueba.status}.`);
 
-    const tiff = await GeoTIFF.fromUrl(url, { allowFullFile: false, maxRanges: 0 });
+    const tiff = await GeoTIFF.fromUrl(url, { allowFullFile: false, maxRanges: 0, headers: auth() });
     const img = await tiff.getImage();
     const [ox, oy] = img.getOrigin();
     const [trx, try_] = img.getResolution();

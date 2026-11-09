@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="es-CL">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="robots" content="noindex, nofollow" />
+  <title>Administración — Gotyx</title>
+  <meta name="theme-color" content="#050e16" />
+  <link rel="icon" href="assets/logo.png" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap" />
+  <link rel="stylesheet" href="assets/landing.css" />
+  <script src="app/config.js"></script>
+  <style>
+    body { padding: 28px 0 60px; }
+    .cab { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 26px; flex-wrap: wrap; }
+    .pestanas { display: flex; gap: 8px; margin-bottom: 18px; }
+    .pestanas button { font: 700 15px Manrope; color: var(--suave); background: none; border: 1px solid var(--linea); border-radius: 30px; padding: 9px 18px; cursor: pointer; }
+    .pestanas button.on { color: var(--fondo); background: var(--agua); border-color: var(--agua); }
+    .caja-adm { background: var(--panel); border: 1px solid var(--linea); border-radius: 18px; padding: 22px; }
+    table { width: 100%; border-collapse: collapse; font-size: 14.5px; }
+    th { text-align: left; font: 600 11.5px var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--suave); padding: 10px 10px; border-bottom: 1px solid var(--linea-2); }
+    td { padding: 12px 10px; border-bottom: 1px solid var(--linea); vertical-align: top; }
+    td small { color: var(--suave); display: block; margin-top: 3px; white-space: pre-wrap; }
+    .mini { font: 700 12.5px Manrope; padding: 6px 11px; border-radius: 9px; border: 1px solid var(--linea-2); background: rgba(92,200,255,.06); color: var(--texto); cursor: pointer; white-space: nowrap; }
+    .mini:hover { border-color: var(--agua); }
+    .etq { font: 600 11px var(--mono); padding: 3px 9px; border-radius: 20px; border: 1px solid var(--linea-2); color: var(--agua-2); }
+    .etq.gris { color: var(--tenue); border-color: var(--linea); }
+    .crear { display: grid; grid-template-columns: 1.2fr 1fr 1fr auto; gap: 10px; align-items: end; margin-bottom: 20px; }
+    .resultado { display: none; margin: 0 0 20px; padding: 18px; border: 1px solid var(--agua); border-radius: 14px; background: rgba(92,200,255,.08); }
+    .resultado.on { display: block; }
+    .resultado pre { white-space: pre-wrap; font: 500 14px/1.6 var(--mono); margin: 10px 0 14px; color: var(--texto); }
+    .vacio { color: var(--suave); padding: 30px 0; text-align: center; }
+    .msj { min-height: 22px; margin-top: 10px; font-size: 14px; color: #ff9c7a; }
+    @media (max-width: 760px) { .crear { grid-template-columns: 1fr; } .ocultable { display: none; } }
+  </style>
+</head>
+<body>
+  <svg width="0" height="0" style="position:absolute"><symbol id="gota" viewBox="0 0 32 32"><path d="M16 2.5S6 13.6 6 20a10 10 0 0 0 20 0C26 13.6 16 2.5 16 2.5Z" fill="#5cc8ff" /><path d="M9.2 19.5c2.2-.9 3.8.8 6.3.1s3.8-1.6 6.5-.4" stroke="#050e16" stroke-width="1.8" fill="none" stroke-linecap="round" /></symbol></svg>
+  <div class="contenedor">
+    <div class="cab">
+      <a class="logo" href="./"><svg><use href="#gota" /></svg><span>Got<i>yx</i></span></a>
+      <div class="etiqueta">Administración</div>
+    </div>
+
+    <!-- acceso -->
+    <div class="caja-adm" id="acceso" style="max-width:460px">
+      <h2 style="margin:0 0 6px">Clave de administración</h2>
+      <p style="color:var(--suave);margin:0 0 18px">Se guarda solo en esta pestaña del navegador.</p>
+      <div class="campo"><label for="clave-adm">Clave</label><input id="clave-adm" type="password" autocomplete="off" /></div>
+      <button class="boton primario" id="entrar" style="margin-top:14px;width:100%;justify-content:center">Entrar</button>
+      <div class="msj" id="msj-acceso"></div>
+    </div>
+
+    <!-- panel -->
+    <div id="panel-adm" hidden>
+      <div class="pestanas"><button data-p="demos" class="on">Solicitudes de demo</button><button data-p="cuentas">Cuentas</button><button id="cerrar" style="margin-left:auto">Cerrar</button></div>
+
+      <section class="caja-adm" id="p-demos">
+        <table><thead><tr><th>Fecha</th><th>Contacto</th><th class="ocultable">Rubro y terreno</th><th>Estado</th><th></th></tr></thead><tbody id="t-demos"></tbody></table>
+        <div class="vacio" id="v-demos" hidden>Aún no hay solicitudes.</div>
+      </section>
+
+      <section class="caja-adm" id="p-cuentas" hidden>
+        <div class="crear">
+          <div class="campo"><label for="c-correo">Correo</label><input id="c-correo" type="email" /></div>
+          <div class="campo"><label for="c-nombre">Nombre</label><input id="c-nombre" /></div>
+          <div class="campo"><label for="c-empresa">Empresa</label><input id="c-empresa" /></div>
+          <button class="boton primario" id="crear">Crear cuenta</button>
+        </div>
+        <div class="msj" id="msj-cuentas"></div>
+        <div class="resultado" id="resultado">
+          <b>Cuenta lista. Copia la clave ahora: no se vuelve a mostrar.</b>
+          <pre id="invitacion"></pre>
+          <button class="mini" id="copiar">Copiar mensaje de invitación</button>
+        </div>
+        <table><thead><tr><th>Cuenta</th><th class="ocultable">Creada · último ingreso</th><th>Estado</th><th></th></tr></thead><tbody id="t-cuentas"></tbody></table>
+        <div class="vacio" id="v-cuentas" hidden>Aún no hay cuentas.</div>
+      </section>
+    </div>
+  </div>
+
+  <script>
+    const API = (window.GOTA_API || "").replace(/\/$/, "");
+    const $ = (id) => document.getElementById(id);
+    const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+    const fecha = (s) => (s ? new Date(s).toLocaleString("es-CL", { dateStyle: "medium", timeStyle: "short" }) : "—");
+    let CLAVE = (() => { try { return sessionStorage.getItem("gotyx-admin") || ""; } catch { return ""; } })();
+
+    async function api(ruta, metodo = "GET", cuerpo) {
+      const r = await fetch(`${API}${ruta}`, { method: metodo, headers: { "X-Admin-Key": CLAVE, ...(cuerpo ? { "Content-Type": "application/json" } : {}) }, body: cuerpo ? JSON.stringify(cuerpo) : undefined });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) { const e = new Error(d.error || `Error ${r.status}`); e.status = r.status; throw e; }
+      return d;
+    }
+
+    async function cargarDemos() {
+      const { demos } = await api("/admin/demos");
+      $("v-demos").hidden = demos.length > 0;
+      $("t-demos").innerHTML = demos.map((d) => `<tr>
+        <td>${fecha(d.fecha)}</td>
+        <td><b>${esc(d.nombre)}</b><small>${esc(d.empresa)}\n<a href="mailto:${esc(d.correo)}" style="color:var(--agua)">${esc(d.correo)}</a>${d.telefono ? " · " + esc(d.telefono) : ""}</small></td>
+        <td class="ocultable">${esc(d.rubro)}<small>${esc(d.mensaje || "—")}</small></td>
+        <td><span class="etq ${d.estado === "nueva" ? "" : "gris"}">${esc(d.estado)}</span></td>
+        <td style="display:flex;gap:6px;flex-wrap:wrap">
+          <button class="mini" data-cuenta="${esc(d.correo)}" data-nombre="${esc(d.nombre)}" data-empresa="${esc(d.empresa)}">Crear cuenta</button>
+          <button class="mini" data-estado="${esc(d.id)}" data-valor="${d.estado === "nueva" ? "contactada" : "nueva"}">${d.estado === "nueva" ? "Marcar contactada" : "Marcar nueva"}</button>
+        </td></tr>`).join("");
+    }
+    async function cargarCuentas() {
+      const { usuarios } = await api("/admin/usuarios");
+      $("v-cuentas").hidden = usuarios.length > 0;
+      $("t-cuentas").innerHTML = usuarios.map((u) => `<tr>
+        <td><b>${esc(u.nombre || u.id)}</b><small>${esc(u.id)}${u.empresa ? " · " + esc(u.empresa) : ""}</small></td>
+        <td class="ocultable">${fecha(u.creado)}<small>${u.ultimoIngreso ? "último ingreso: " + fecha(u.ultimoIngreso) : "sin ingresos"}</small></td>
+        <td><span class="etq ${u.activo ? "" : "gris"}">${u.activo ? "activa" : "desactivada"}</span></td>
+        <td style="display:flex;gap:6px;flex-wrap:wrap">
+          <button class="mini" data-clave="${esc(u.id)}">Nueva clave</button>
+          <button class="mini" data-activa="${esc(u.id)}" data-valor="${u.activo ? "0" : "1"}">${u.activo ? "Desactivar" : "Activar"}</button>
+        </td></tr>`).join("");
+    }
+    function mostrarInvitacion(correo, nombre, clave) {
+      const url = new URL("ingresar.html", location.href).href;
+      $("invitacion").textContent = `Hola${nombre ? " " + nombre.split(" ")[0] : ""}, te creamos tu cuenta en Gotyx:\n\nIngresa en: ${url}\nCorreo: ${correo}\nClave: ${clave}\n\nCualquier duda, responde este correo.`;
+      $("resultado").classList.add("on");
+      $("resultado").scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+    async function crearCuenta(correo, nombre, empresa) {
+      $("msj-cuentas").textContent = "";
+      try {
+        const r = await api("/admin/usuarios", "POST", { correo, nombre, empresa });
+        mostrarInvitacion(r.correo, nombre, r.clave);
+        await cargarCuentas();
+      } catch (e) { $("msj-cuentas").textContent = e.message; }
+    }
+
+    async function entrar() {
+      $("msj-acceso").textContent = "";
+      try {
+        await cargarDemos(); await cargarCuentas();
+        try { sessionStorage.setItem("gotyx-admin", CLAVE); } catch {}
+        $("acceso").hidden = true; $("panel-adm").hidden = false;
+      } catch (e) {
+        $("msj-acceso").textContent = e.status === 401 ? "Clave incorrecta." : e.message;
+        try { sessionStorage.removeItem("gotyx-admin"); } catch {}
+      }
+    }
+    $("entrar").onclick = () => { CLAVE = $("clave-adm").value.trim(); entrar(); };
+    $("clave-adm").onkeydown = (e) => { if (e.key === "Enter") $("entrar").click(); };
+    $("cerrar").onclick = () => { try { sessionStorage.removeItem("gotyx-admin"); } catch {} location.reload(); };
+    document.querySelectorAll(".pestanas [data-p]").forEach((b) => (b.onclick = () => {
+      document.querySelectorAll(".pestanas [data-p]").forEach((x) => x.classList.toggle("on", x === b));
+      $("p-demos").hidden = b.dataset.p !== "demos"; $("p-cuentas").hidden = b.dataset.p !== "cuentas";
+    }));
+    $("crear").onclick = () => crearCuenta($("c-correo").value.trim(), $("c-nombre").value.trim(), $("c-empresa").value.trim());
+    $("copiar").onclick = async () => { try { await navigator.clipboard.writeText($("invitacion").textContent); $("copiar").textContent = "¡Copiado!"; } catch {} };
+    document.addEventListener("click", async (e) => {
+      const b = e.target.closest("button"); if (!b) return;
+      try {
+        if (b.dataset.cuenta) {
+          document.querySelector('.pestanas [data-p="cuentas"]').click();
+          $("c-correo").value = b.dataset.cuenta; $("c-nombre").value = b.dataset.nombre; $("c-empresa").value = b.dataset.empresa;
+          await crearCuenta(b.dataset.cuenta, b.dataset.nombre, b.dataset.empresa);
+        } else if (b.dataset.estado) {
+          await api("/admin/demos/estado", "POST", { id: b.dataset.estado, estado: b.dataset.valor }); await cargarDemos();
+        } else if (b.dataset.clave) {
+          if (!confirm(`¿Generar una clave nueva para ${b.dataset.clave}? La anterior deja de funcionar.`)) return;
+          const r = await api("/admin/usuarios/clave", "POST", { correo: b.dataset.clave });
+          mostrarInvitacion(r.correo, "", r.clave);
+        } else if (b.dataset.activa) {
+          await api("/admin/usuarios/estado", "POST", { correo: b.dataset.activa, activo: b.dataset.valor === "1" }); await cargarCuentas();
+        }
+      } catch (err) { alert(err.message); }
+    });
+    if (CLAVE) entrar();
+  </script>
+</body>
+</html>
