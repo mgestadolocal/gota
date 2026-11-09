@@ -97,13 +97,8 @@ export function pintar(capa, g, a, opciones = {}) {
       const v = a.acc[i];
       // sobre agua quieta (pozas o lagunas) no hay cauce: se pinta como lámina de agua
       const quieta = (T ? T.profT[i] : a.prof[i]) >= 0.05;
+      // los cauces se dibujan como líneas vectoriales (cauces.js); aquí solo el agua quieta
       if (quieta) { col = AGUA_QUIETA; al = 0.55; }
-      else if (v >= umbral) {
-        const t = T
-          ? (Math.log10(Math.max(T.qp[i], 0.005)) - qMin) / (qMax - qMin || 1)
-          : (Math.log10(v) - accMin) / (accMax - accMin || 1);
-        col = rampa(AGUA, 0.25 + 0.75 * t); al = 0.45 + 0.55 * Math.min(1, t * 1.4);
-      }
     } else if (capa === "cobertura" && a.clase) {
       const c = WC[a.clase[i]];
       if (c) { col = c; al = 0.72; }

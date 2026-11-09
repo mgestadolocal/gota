@@ -180,3 +180,23 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
 .usuario { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 16px; font-size: 12.5px; color: var(--suave); border-bottom: 1px solid var(--borde); }
 .usuario span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .usuario button { min-height: 28px; padding: 3px 10px; font-size: 12px; }
+
+/* ---------- pantalla de carga de la demo ---------- */
+.demo-carga { position: fixed; inset: 0; z-index: 20; display: grid; place-items: center; background: radial-gradient(80% 70% at 50% 45%, rgba(5, 14, 22, 0.55), rgba(5, 14, 22, 0.85)); backdrop-filter: blur(3px); transition: opacity 0.6s; }
+.demo-carga.fuera { opacity: 0; pointer-events: none; }
+.dc-caja { width: min(420px, calc(100% - 32px)); background: rgba(8, 22, 34, 0.94); border: 1px solid rgba(92, 200, 255, 0.35); border-radius: 22px; padding: 28px 28px 24px; color: #eaf6ff; box-shadow: 0 30px 80px rgba(0, 0, 0, 0.5), 0 0 60px rgba(92, 200, 255, 0.12); font-family: Manrope, system-ui, sans-serif; }
+.dc-gota { width: 46px; height: 46px; margin-bottom: 14px; animation: dc-latido 1.6s ease-in-out infinite; }
+.dc-gota svg { width: 100%; height: 100%; fill: #5cc8ff; filter: drop-shadow(0 0 14px rgba(92, 200, 255, 0.6)); }
+@keyframes dc-latido { 50% { transform: translateY(-4px) scale(1.06); } }
+.dc-titulo { font-weight: 800; font-size: 20px; letter-spacing: -0.02em; margin-bottom: 16px; }
+.dc-pasos { list-style: none; margin: 0 0 18px; padding: 0; display: grid; gap: 10px; font-size: 14.5px; }
+.dc-pasos li { display: flex; align-items: center; gap: 10px; color: #6f8a9c; transition: color 0.3s; }
+.dc-pasos li::before { content: ""; width: 16px; height: 16px; border-radius: 50%; border: 2px solid #2b4558; flex: none; box-sizing: border-box; }
+.dc-pasos li.en { color: #eaf6ff; }
+.dc-pasos li.en::before { border-color: #2b4558; border-top-color: #5cc8ff; animation: dc-gira 0.8s linear infinite; }
+.dc-pasos li.ok { color: #b9d6e6; }
+.dc-pasos li.ok::before { background: #5cc8ff; border-color: #5cc8ff; box-shadow: inset 0 0 0 3px rgba(8, 22, 34, 0.94); }
+@keyframes dc-gira { to { transform: rotate(360deg); } }
+.dc-barra { height: 4px; border-radius: 4px; background: #1a3245; overflow: hidden; }
+.dc-barra i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, #2b7bba, #5cc8ff); box-shadow: 0 0 12px #5cc8ff; transition: width 0.6s cubic-bezier(0.2, 0.8, 0.2, 1); }
+.modo-demo #estado { display: none !important; }

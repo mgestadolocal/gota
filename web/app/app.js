@@ -1,5 +1,7 @@
 /* global maplibregl */
 import { geotiffFloat32 } from "./geotiff_escribir.js";
+import { crearCapaLluvia } from "./lluvia_gl.js";
+import { redCauces } from "./cauces.js";
 import { cargarCopernicus, cargarArchivo, mascara, esquinas, afin, areaAnillo } from "./dem.js";
 import { pintar, sombreado, curvas, equidistancia, leyenda, CLASES_PEND } from "./render.js";
 import { cargarCobertura } from "./cobertura.js";
@@ -53,7 +55,8 @@ const mapa = new maplibregl.Map({
         attribution: "Imágenes © Esri, Maxar, Earthstar Geographics",
       },
       dem: {
-        type: "raster-dem", encoding: "terrarium", tileSize: 256, maxzoom: 15,
+        // tileSize 512 con teselas de 256: la malla del relieve usa la mitad de teselas por lado (4x menos), mucho más fluido
+        type: "raster-dem", encoding: "terrarium", tileSize: 512, maxzoom: 14,
         tiles: ["https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png"],
       },
     },
@@ -61,26 +64,35 @@ const mapa = new maplibregl.Map({
   },
   center: [-71.05, -34.45],
   zoom: 9,
-  maxPitch: 80,
-  preserveDrawingBuffer: true,
+  maxPitch: 75,
+  // sin preserveDrawingBuffer (es caro en GPUs integradas); el informe captura el mapa justo al dibujarse
+  pixelRatio: Math.min(window.devicePixelRatio || 1, 1.5),
   attributionControl: { compact: true },
 });
 mapa.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "top-right");
 mapa.addControl(new maplibregl.ScaleControl({ unit: "metric" }), "bottom-right");
 
 const vacio = { type: "FeatureCollection", features: [] };
+const lluviaGL = crearCapaLluvia(mapa);
+window.__gotyxMapa = mapa;
+window.__gotyxLluvia = lluviaGL; // para ajustes de presentación (tamaño y brillo de las gotas)
 mapa.on("load", () => {
   mapa.addSource("curvas", { type: "geojson", data: vacio });
   mapa.addSource("poligono", { type: "geojson", data: vacio });
-  mapa.addSource("gotas", { type: "geojson", data: vacio, lineMetrics: true });
+  mapa.addSource("cauces", { type: "geojson", data: vacio, tolerance: 0.2 });
   mapa.addLayer({ id: "curvas", type: "line", source: "curvas",
     paint: { "line-color": "#ffffff", "line-opacity": ["case", ["get", "maestra"], 0.75, 0.38], "line-width": ["case", ["get", "maestra"], 1.4, 0.7] } });
+  // cauces: brillo ancho + núcleo; grosor y color según el caudal (o área aportante) normalizado "t" (0..1)
+  const ancho = (k) => ["interpolate", ["linear"], ["zoom"], 10, ["*", k * 0.6, ["+", 0.6, ["*", 2.6, ["get", "t"]]]], 15, ["*", k * 2.2, ["+", 0.6, ["*", 2.6, ["get", "t"]]]]];
+  mapa.addLayer({ id: "cauces-brillo", type: "line", source: "cauces", layout: { "line-cap": "round", "line-join": "round" },
+    paint: { "line-color": "#5cc8ff", "line-blur": 3, "line-width": ancho(2.6), "line-opacity": ["*", ["case", ["==", ["get", "dentro"], 1], 0.35, 0.12], ["+", 0.3, ["get", "t"]]] } }, "curvas");
+  mapa.addLayer({ id: "cauces", type: "line", source: "cauces", layout: { "line-cap": "round", "line-join": "round" },
+    paint: { "line-color": ["interpolate", ["linear"], ["get", "t"], 0, "#a8e4ff", 0.5, "#3aa0f0", 1, "#0d5fc4"],
+      "line-width": ancho(1), "line-opacity": ["case", ["==", ["get", "dentro"], 1], 0.95, 0.35] } }, "curvas");
   mapa.addLayer({ id: "pol-relleno", type: "fill", source: "poligono", filter: ["==", "$type", "Polygon"], paint: { "fill-color": "#ffd166", "fill-opacity": 0.08 } });
   mapa.addLayer({ id: "pol-linea", type: "line", source: "poligono", filter: ["!=", "$type", "Point"], paint: { "line-color": "#ffd166", "line-width": 2.4 } });
-  // gotas: estela con degradé (cola transparente, cabeza brillante)
-  mapa.addLayer({ id: "gotas", type: "line", source: "gotas", layout: { "line-cap": "round", "line-join": "round" },
-    paint: { "line-width": ["interpolate", ["linear"], ["zoom"], 10, 1.6, 16, 3.6], "line-opacity": ["get", "o"],
-      "line-gradient": ["interpolate", ["linear"], ["line-progress"], 0, "rgba(155,227,255,0)", 0.6, "rgba(155,227,255,0.7)", 1, "#effbff"] } });
+  // gotas: capa WebGL propia (ver lluvia_gl.js)
+  mapa.addLayer(lluviaGL.capa);
   mapa.addLayer({ id: "pol-vertices", type: "circle", source: "poligono", filter: ["==", "$type", "Point"],
     paint: { "circle-radius": 4.5, "circle-color": "#ffd166", "circle-stroke-color": "#1d2420", "circle-stroke-width": 1.5 } });
 });
@@ -245,6 +257,7 @@ function limpiarResultados() {
   marcaQ.remove();
   if (mapa.getLayer("capa")) mapa.setLayoutProperty("capa", "visibility", "none");
   mapa.getSource("curvas")?.setData(vacio);
+  mapa.getSource("cauces")?.setData(vacio);
   if ($("t-3d").checked) { $("t-3d").checked = false; alternar3D(false); }
 }
 
@@ -296,16 +309,33 @@ function pintarCapa() {
     return;
   }
   const op = { umbralCauce: umbral(), retorno: E.T };
+  actualizarCauces(capa === "escurrimiento");
   const url = pintar(capa, E.g, E.an, op).toDataURL("image/png");
   const coordinates = esquinas(E.g);
   const src = mapa.getSource("capa");
   if (src) src.updateImage({ url, coordinates });
   else {
     mapa.addSource("capa", { type: "image", url, coordinates });
-    mapa.addLayer({ id: "capa", type: "raster", source: "capa", paint: { "raster-fade-duration": 0, "raster-resampling": "nearest" } }, "curvas");
+    mapa.addLayer({ id: "capa", type: "raster", source: "capa", paint: { "raster-fade-duration": 0, "raster-resampling": "linear" } }, "cauces-brillo");
   }
   mapa.setLayoutProperty("capa", "visibility", "visible");
   $("leyenda").innerHTML = leyenda(capa, E.an, op);
+}
+
+// red de cauces vectorial (escurrimiento): caudal de la tormenta si existe, si no área aportante
+function actualizarCauces(mostrar) {
+  const src = mapa.getSource("cauces");
+  if (!src) return;
+  if (!mostrar || !E.an) { src.setData(vacio); return; }
+  const T = E.an.tormenta;
+  const valor = T ? T.qp : E.an.acc;
+  const fc = redCauces(E.g, E.an, umbral(), valor);
+  // normalización logarítmica a 0..1 para grosor y color
+  let vmin = Infinity, vmax = 0;
+  for (const f of fc.features) { const v = f.properties.v; if (v > 0) { vmin = Math.min(vmin, v); vmax = Math.max(vmax, v); } }
+  const l0 = Math.log10(Math.max(vmin, T ? 0.005 : 1)), l1 = Math.log10(Math.max(vmax, 1e-9));
+  for (const f of fc.features) f.properties.t = Math.max(0, Math.min(1, (Math.log10(Math.max(f.properties.v, 1e-9)) - l0) / (l1 - l0 || 1)));
+  src.setData(fc);
 }
 
 function elegirCapa(capa) {
@@ -332,7 +362,7 @@ function alternar3D(on) {
   $("ctl3d").hidden = !on;
   if (on) {
     mapa.setTerrain({ source: "dem", exaggeration: Number($("exagerar").value) });
-    mapa.easeTo({ center: centroTerreno(), pitch: 62, duration: 900 });
+    mapa.easeTo({ center: centroTerreno(), pitch: 55, duration: 1600, easing: (t) => t * t * (3 - 2 * t) });
   } else {
     mapa.setTerrain(null);
     mapa.easeTo({ pitch: 0, bearing: 0, duration: 600 });
@@ -389,103 +419,34 @@ $("orbitar").onclick = () => {
 };
 for (const ev of ["mousedown", "touchstart", "wheel"]) mapa.getCanvasContainer().addEventListener(ev, () => orbita.raf && detenerOrbita(), { passive: true });
 
-// ---------- simulación de lluvia (partículas que siguen el flujo D8) ----------
-// Movimiento por tiempo (celdas por segundo), no por cuadro: se ve igual de fluido con 30 o 120 fps.
-// Cada gota deja una estela corta; al llegar a una poza o laguna se funde en ella.
-const VX = [1, 1, 0, -1, -1, -1, 0, 1], VY = [0, 1, 1, 1, 0, -1, -1, -1];
-const lluvia = { raf: 0, gotas: [], celdas: null, aLL: null, ultimo: 0, veloc: 1 };
-const ESTELA = 7; // posiciones que se guardan para la estela
-
+// ---------- simulación de lluvia (partículas que siguen el flujo D8, dibujadas en WebGL) ----------
 const enPoza = (i) => (E.an.tormenta ? E.an.tormenta.profT : E.an.prof)[i] >= 0.05;
-
-function nuevaGota(g) {
-  const sortear = () => lluvia.celdas[(Math.random() * lluvia.celdas.length) | 0];
-  g.i = sortear();
-  for (let k = 0; k < 30; k++) {
-    // no nacen dentro de pozas; con tormenta, nacen más donde el suelo escurre más
-    // probabilidad base alta en todo el polígono; algo más donde se genera más escorrentía
-    const ok = !enPoza(g.i) && E.an.dir[g.i] >= 0 && (!lluvia.esc || Math.random() <= 0.45 + 0.55 * Math.min(1, lluvia.esc[g.i] / lluvia.escMax));
-    if (ok) break;
-    g.i = sortear();
-  }
-  g.t = Math.random();
-  g.vida = 0;
-  g.max = 3 + Math.random() * 4; // segundos
-  g.funde = 0; // > 0 cuando entra a una poza
-  g.hist = [];
-  return g;
-}
+const lluvia = { activa: false };
 
 function iniciarLluvia() {
   const { mask } = E.an;
   const idx = [];
   for (let i = 0; i < mask.length; i++) if (mask[i]) idx.push(i);
-  lluvia.celdas = Int32Array.from(idx);
-  lluvia.aLL = afin(E.g);
-  // con tormenta: más gotas y más rápidas cuanto más escurre
+  const celdas = Int32Array.from(idx);
+  // con tormenta: más gotas y más rápidas cuanto más escurre; nacen más donde se genera escorrentía
   const T = E.an.tormenta;
   const escMedia = T ? (T.stats.genera / (idx.length * E.g.dx * E.g.dy)) * 1000 : 0; // mm
-  lluvia.esc = T ? T.escurre : null;
-  lluvia.escMax = 1;
+  let escMax = 1;
   if (T) {
     // referencia = percentil 90 fuera de pozas (las lagunas escurren ~100 % y aplastarían al resto)
-    const v = Array.from(lluvia.celdas).filter((i) => !enPoza(i)).map((i) => T.escurre[i]).sort((x, y) => x - y);
-    lluvia.escMax = Math.max(1, v[Math.floor(v.length * 0.9)] || 1);
+    const v = Array.from(celdas).filter((i) => !enPoza(i)).map((i) => T.escurre[i]).sort((x, y) => x - y);
+    escMax = Math.max(1, v[Math.floor(v.length * 0.9)] || 1);
   }
-  const n = T
-    ? Math.min(2500, Math.max(200, Math.round((idx.length / 4) * Math.min(3, escMedia / 15))))
-    : Math.min(1800, Math.max(400, Math.round(idx.length / 4)));
-  lluvia.veloc = T ? 1 + 0.6 * Math.min(1, escMedia / 40) : 1;
-  lluvia.gotas = Array.from({ length: n }, () => nuevaGota({}));
+  const cantidad = T
+    ? Math.min(5000, Math.max(800, Math.round((idx.length / 3) * Math.min(3, escMedia / 15))))
+    : Math.min(3500, Math.max(800, Math.round(idx.length / 3)));
+  lluviaGL.iniciar({ E, afin: afin(E.g), enPoza, celdas, esc: T ? T.escurre : null, escMax,
+    veloc: T ? 1 + 0.6 * Math.min(1, escMedia / 40) : 1, cantidad });
   lluvia.activa = true;
-  lluvia.ultimo = 0;
-
-  const paso = (ts) => {
-    if (!lluvia.activa) return;
-    lluvia.raf = requestAnimationFrame(paso);
-    const dt = lluvia.ultimo ? Math.min(0.1, (ts - lluvia.ultimo) / 1000) : 0;
-    lluvia.ultimo = ts;
-    if (dt <= 0) return;
-    const { dir, pendiente: pe } = E.an;
-    const w = E.g.w, h = E.g.h;
-    const f = [];
-    for (const g of lluvia.gotas) {
-      g.vida += dt;
-      if (g.vida > g.max || (g.funde && (g.funde += dt) > 0.6)) { nuevaGota(g); continue; }
-      // celdas por segundo: más rápido en pendiente, lento al fundirse en una poza
-      const v = g.funde ? 1.5 : lluvia.veloc * (5 + 16 * Math.min(1, pe[g.i] / 15));
-      g.t += v * dt;
-      let reinicio = false;
-      while (g.t >= 1) {
-        g.t -= 1;
-        const k = dir[g.i];
-        const r = (g.i / w) | 0, c = g.i - r * w;
-        const rr = r + VY[k], cc = c + VX[k];
-        if (k < 0 || rr < 0 || cc < 0 || rr >= h || cc >= w) { reinicio = true; break; }
-        g.i = rr * w + cc;
-        if (dir[g.i] < 0) { reinicio = true; break; }
-        if (!g.funde && enPoza(g.i)) g.funde = 0.001;
-      }
-      if (reinicio) { nuevaGota(g); continue; }
-      const r = (g.i / w) | 0, c = g.i - r * w, kk = dir[g.i];
-      g.hist.push(lluvia.aLL(c + 0.5 + VX[kk] * g.t, r + 0.5 + VY[kk] * g.t));
-      if (g.hist.length > ESTELA) g.hist.shift();
-      if (g.hist.length < 2) continue;
-      const aparece = Math.min(1, g.vida / 0.4), desaparece = Math.min(1, (g.max - g.vida) / 0.5);
-      const o = Math.min(aparece, desaparece) * (g.funde ? 1 - g.funde / 0.6 : 1);
-      f.push({ type: "Feature", properties: { o }, geometry: { type: "LineString", coordinates: g.hist.slice() } });
-    }
-    mapa.getSource("gotas").setData({ type: "FeatureCollection", features: f });
-  };
-  lluvia.raf = requestAnimationFrame(paso);
 }
 function detenerLluvia() {
-  cancelAnimationFrame(lluvia.raf);
-  lluvia.raf = 0;
+  lluviaGL.detener();
   lluvia.activa = false;
-  const limpiar = () => mapa.getSource("gotas")?.setData(vacio);
-  limpiar();
-  setTimeout(limpiar, 120); // por si quedó una actualización en vuelo
   $("t-lluvia").checked = false;
 }
 $("t-lluvia").onchange = (e) => {
@@ -640,10 +601,16 @@ function informeTormenta(fila) {
   return `<h2>Tormenta de ${t.T} años</h2><table>${fila("Lluvia en 24 h", `${fmt(t.P24, 1)} mm`)}${fila("Agua que cae sobre el terreno", m3(s.llueve))}${fila("Escurre por la superficie", m3(s.genera))}${fila("Se infiltra", m3(s.infiltra))}${fila("Queda en pozas", s.aCharcos ? `${m3(s.enCharcos)} en ${ha(s.aCharcos)}` : "no se forman")}${fila("Sale del terreno", m3(s.sale))}${fila("Entra desde terrenos vecinos", m3(s.entra))}${fila("Caudal máximo en el cauce principal", caudalTxt(s.qMax))}${fila("Suelo / número de curva medio", `tipo ${t.suelo} / ${fmt(s.cnMedio)}`)}</table><p class="nota">Lluvias: GPEX (Gründemann et al. 2021, CC BY 4.0), base satelital MSWEP de 0,1°. Escorrentía: número de curva SCS con cobertura ESA WorldCover 2021 (CC BY 4.0). Caudal: método racional con tiempo de concentración de California; las duraciones menores a 3 h se extrapolan.</p>`;
 }
 
-$("b-informe").onclick = () => {
+// captura del mapa: se toma dentro del evento "render", cuando el cuadro aún está en el búfer
+const capturarMapa = () => new Promise((ok) => {
+  mapa.once("render", () => ok(mapa.getCanvas().toDataURL("image/jpeg", 0.9)));
+  mapa.triggerRepaint();
+});
+
+$("b-informe").onclick = async () => {
   const st = E.an.stats, g = E.g;
   const [lon, lat] = mapa.getCenter().toArray();
-  const img = mapa.getCanvas().toDataURL("image/jpeg", 0.9);
+  const img = await capturarMapa();
   const fila = (a, b) => `<tr><td>${a}</td><td>${b}</td></tr>`;
   $("informe").innerHTML = `
     <h1>Informe de terreno</h1>
@@ -665,8 +632,10 @@ $("plegar").onclick = () => $("panel").classList.toggle("plegado");
 
 // ---------- modo demo (?demo=macul | ?demo=aculeo): casos precargados, sin dibujar terrenos propios ----------
 const DEMOS = {
-  macul: { nombre: "Quebrada de Macul · Peñalolén", anillo: [[-70.528, -33.47], [-70.46, -33.468], [-70.458, -33.53], [-70.53, -33.532]], capa: "escurrimiento", exagerar: 1.4 },
-  aculeo: { nombre: "Laguna de Aculeo · Paine", anillo: [[-70.975, -33.805], [-70.855, -33.80], [-70.85, -33.885], [-70.97, -33.89]], capa: "encharcamiento", exagerar: 2.2 },
+  macul: { nombre: "Quebrada de Macul · Peñalolén", anillo: [[-70.528, -33.47], [-70.46, -33.468], [-70.458, -33.53], [-70.53, -33.532]],
+    capa: "escurrimiento", exagerar: 1.4, camara: { bearing: 80, pitch: 56, zoom: -0.15 } },
+  aculeo: { nombre: "Laguna de Aculeo · Paine", anillo: [[-70.975, -33.805], [-70.855, -33.80], [-70.85, -33.885], [-70.97, -33.89]],
+    capa: "encharcamiento", exagerar: 2.2, camara: { bearing: 8, pitch: 50, zoom: 0 } },
 };
 const demo = DEMOS[params.get("demo")];
 if (demo) {
@@ -681,26 +650,75 @@ if (demo) {
   cambiar.innerHTML = `Casos de la demo: <a href="?demo=macul">Quebrada de Macul</a> · <a href="?demo=aculeo">Laguna de Aculeo</a>`;
   document.querySelector("#paso-terreno .botones").replaceWith(cambiar);
   $("buscar").hidden = true;
+  // menos ruido visual: sin curvas de nivel y solo los cauces principales (se pueden activar en el panel)
+  $("t-curvas").checked = false;
+  $("umbral").value = 48; textoUmbral();
 
-  const esperarQue = (cond) => new Promise((ok) => { const t = setInterval(() => { if (cond()) { clearInterval(t); ok(); } }, 150); });
+  // pantalla de carga con los pasos del cálculo
+  const carga = document.createElement("div");
+  carga.className = "demo-carga";
+  carga.innerHTML = `<div class="dc-caja"><div class="dc-gota"><svg viewBox="0 0 32 32"><path d="M16 2.5S6 13.6 6 20a10 10 0 0 0 20 0C26 13.6 16 2.5 16 2.5Z"/></svg></div>
+    <div class="dc-titulo">${demo.nombre}</div>
+    <ol class="dc-pasos">
+      <li data-p="relieve">Descargando relieve satelital</li>
+      <li data-p="agua">Calculando por dónde corre el agua</li>
+      <li data-p="lluvia">Lluvias extremas de 100 años para este punto</li>
+      <li data-p="tormenta">Simulando la tormenta</li>
+      <li data-p="3d">Preparando vista 3D</li>
+    </ol><div class="dc-barra"><i></i></div></div>`;
+  document.body.append(carga);
+  const pasos = ["relieve", "agua", "lluvia", "tormenta", "3d"];
+  const marcar = (p) => {
+    const k = pasos.indexOf(p);
+    carga.querySelectorAll("li").forEach((li, i) => { li.classList.toggle("ok", i < k); li.classList.toggle("en", i === k); });
+    carga.querySelector(".dc-barra i").style.width = `${(100 * (k + 0.5)) / pasos.length}%`;
+  };
+  marcar("relieve");
+  const vigilar = setInterval(() => {
+    const t = $("estado").textContent || "";
+    if (/escurrimiento|Calculando/i.test(t)) marcar("agua");
+  }, 120);
+
+  const esperarQue = (cond) => new Promise((ok) => { const t = setInterval(() => { if (cond()) { clearInterval(t); ok(); } }, 100); });
   const correrDemo = async () => {
     E.anillo = [...demo.anillo, demo.anillo[0]];
     dibujarPoligono();
     $("info-poligono").hidden = false;
     $("info-poligono").innerHTML = `Polígono de <b>${ha(areaAnillo(E.anillo))}</b> · caso de demostración`;
     const xs = demo.anillo.map((p) => p[0]), ys = demo.anillo.map((p) => p[1]);
+    const caja = [[Math.min(...xs), Math.min(...ys)], [Math.max(...xs), Math.max(...ys)]];
     const celular = innerWidth <= 720;
     if (celular) $("panel").classList.add("plegado");
-    mapa.fitBounds([[Math.min(...xs), Math.min(...ys)], [Math.max(...xs), Math.max(...ys)]], { padding: { left: celular ? 20 : 400, right: celular ? 20 : 40, top: 70, bottom: celular ? 90 : 60 }, duration: 0 });
+    const pad = { left: celular ? 16 : 400, right: celular ? 16 : 40, top: 80, bottom: celular ? 90 : 50 };
+    mapa.fitBounds(caja, { padding: pad, duration: 0 });
     actualizarBotonAnalizar();
     $("b-analizar").click();
-    await esperarQue(() => E.an && !$("paso-tormenta").hidden && E.lluvias);
+    await esperarQue(() => E.an && !$("paso-tormenta").hidden);
+    marcar("lluvia");
+    await esperarQue(() => E.lluvias);
     E.T = 100; mostrarIDF();
+    marcar("tormenta");
     await simularTormenta();
     elegirCapa(demo.capa);
+    marcar("3d");
     $("exagerar").value = demo.exagerar; $("exagerar").dispatchEvent(new Event("input"));
-    $("t-3d").checked = true; alternar3D(true);
+    $("t-3d").checked = true; $("ctl3d").hidden = false;
+    mapa.setTerrain({ source: "dem", exaggeration: demo.exagerar });
+    // espera a que el relieve cargue antes de mostrar (sin saltos ni teselas a medio cargar)
+    await new Promise((ok) => { mapa.once("idle", ok); setTimeout(ok, 6000); });
+    const cam = mapa.cameraForBounds(caja, { padding: pad, bearing: demo.camara.bearing });
+    clearInterval(vigilar);
+    carga.querySelector(".dc-barra i").style.width = "100%";
+    carga.classList.add("fuera");
+    setTimeout(() => carga.remove(), 700);
     $("t-lluvia").checked = true; iniciarLluvia();
+    mapa.flyTo({ center: cam.center, zoom: cam.zoom + demo.camara.zoom, bearing: demo.camara.bearing, pitch: demo.camara.pitch,
+      duration: 3200, curve: 1.2, easing: (t) => t * t * (3 - 2 * t), essential: true });
   };
-  if (mapa.loaded()) correrDemo(); else mapa.once("load", correrDemo);
+  const correrSeguro = () => correrDemo().catch((err) => {
+    console.error(err);
+    clearInterval(vigilar);
+    carga.querySelector(".dc-pasos").innerHTML = `<li class="en" style="color:#ffb39e">No pudimos cargar la demo. Revisa tu conexión y <a href="" style="color:#5cc8ff">vuelve a intentar</a>.</li>`;
+  });
+  if (mapa.loaded()) correrSeguro(); else mapa.once("load", correrSeguro);
 }
