@@ -28,7 +28,6 @@ export const CLASES_PEND = [
 ];
 const PEND_RGB = CLASES_PEND.map((c) => hex(c.color));
 const AGUA = [[0, hex("#bfe6ff")], [0.4, hex("#4aa8ff")], [1, hex("#0b3d91")]];
-const CORTE = hex("#d7301f"), RELLENO = hex("#2b7bba"), NEUTRO = hex("#f4f1ea");
 
 // Sombreado (hillshade) normalizado 0..1
 export function sombreado(g) {
@@ -72,7 +71,6 @@ export function pintar(capa, g, a, opciones = {}) {
   const umbral = opciones.umbralCauce || 5000; // m²
   const accMax = Math.log10(Math.max(umbral * 10, st.accMax));
   const accMin = Math.log10(umbral);
-  const difMax = opciones.difMax || 1;
 
   for (let i = 0; i < w * h; i++) {
     if (Number.isNaN(z[i])) continue;
@@ -95,12 +93,6 @@ export function pintar(capa, g, a, opciones = {}) {
       if (v >= umbral) {
         const t = (Math.log10(v) - accMin) / (accMax - accMin || 1);
         col = rampa(AGUA, 0.25 + 0.75 * t); al = 0.45 + 0.55 * Math.min(1, t * 1.4);
-      }
-    } else if (capa === "cortes" && a.dif) {
-      const d = a.dif[i];
-      if (!Number.isNaN(d)) {
-        const t = Math.min(1, Math.abs(d) / difMax);
-        col = mezcla(NEUTRO, d > 0 ? CORTE : RELLENO, Math.pow(t, 0.7)); al = 0.82;
       }
     }
     if (!col) continue;
@@ -167,6 +159,5 @@ export function leyenda(capa, a, opciones = {}) {
     return `<b>Pendiente</b>` + CLASES_PEND.map((c, i) => `<div class="ley-fila"><i style="background:${c.color}"></i>${c.txt}<span>${fmt(100 * st.clases[i])} %</span></div>`).join("");
   if (capa === "encharcamiento") return `<b>Encharcamiento (profundidad)</b>${barra(["#bfe6ff", "#4aa8ff", "#0b3d91"], "5 cm", "≥ 1,5 m")}<p class="ley-nota">Depresiones sin salida: donde el agua se junta si llueve fuerte.</p>`;
   if (capa === "escurrimiento") return `<b>Escurrimiento (área aportante)</b>${barra(["#8fd0ff", "#4aa8ff", "#0b3d91"], fmt((opciones.umbralCauce || 5000) / 10000, 1) + " ha", fmt(st.accMax / 10000, 0) + " ha")}<p class="ley-nota">Por dónde corre el agua. Más oscuro = más superficie drena por ahí.</p>`;
-  if (capa === "cortes") return `<b>Cuánto rebajar o rellenar</b>${barra(["#2b7bba", "#f4f1ea", "#d7301f"], "rellenar " + fmt(opciones.difMax || 1, 1) + " m", "rebajar " + fmt(opciones.difMax || 1, 1) + " m")}`;
   return "";
 }

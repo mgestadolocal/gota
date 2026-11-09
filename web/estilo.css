@@ -97,19 +97,32 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
 .campo { display: flex; flex-direction: column; gap: 4px; font-size: 12.5px; font-weight: 600; margin-bottom: 10px; }
 .campo small { font-weight: 400; color: var(--suave); }
 .campo input, .campo select { padding: 7px 9px; border: 1px solid var(--borde); border-radius: 8px; background: var(--fondo); font-weight: 500; }
-.opciones { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
-.opcion { display: flex; gap: 9px; align-items: flex-start; padding: 9px 11px; border: 1px solid var(--borde); border-radius: 10px; cursor: pointer; }
-.opcion:has(input:checked) { border-color: var(--acento); background: var(--fondo); }
-.opcion input { margin-top: 3px; accent-color: var(--acento); }
-.opcion b { display: block; font-size: 13.5px; }
-.opcion small { color: var(--suave); font-size: 12px; }
-.avanzado { font-size: 12.5px; margin-bottom: 6px; }
-.avanzado summary { cursor: pointer; color: var(--suave); margin-bottom: 8px; }
-.explica { grid-column: 1 / -1; font-size: 12.5px; color: var(--suave); margin: 0; }
 .fila { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .pie { font-size: 11px; color: var(--suave); padding-top: 14px; }
 
 .maplibregl-ctrl-attrib { font-size: 10.5px; }
+
+.ctl3d {
+  position: fixed; top: 130px; right: 12px; z-index: 4; width: 168px; padding: 10px; display: flex; flex-direction: column; gap: 7px;
+  background: var(--panel); border-radius: 12px; box-shadow: var(--sombra); font-size: 12.5px;
+}
+.ctl3d[hidden] { display: none; }
+.ctl3d-titulo { font-weight: 800; font-size: 13px; }
+.ctl3d-fila { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+.ctl3d-fila span { color: var(--suave); }
+.ctl3d button { min-height: 32px; padding: 4px 8px; font-size: 15px; }
+.ctl3d-fila button { width: 40px; }
+.ctl3d-sub { color: var(--suave); }
+.ctl3d-rosa { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; }
+.ctl3d-rosa button { font-size: 12.5px; padding: 4px 0; }
+.ctl3d-ancho { font-size: 12.5px !important; }
+.ctl3d-ancho.activo { background: var(--acento); border-color: var(--acento); color: #fff; }
+.ctl3d input[type="range"] { width: 100%; accent-color: var(--acento); margin: 0; }
+.ctl3d-ayuda { margin: 0; color: var(--suave); font-size: 11px; line-height: 1.35; }
+@media (max-width: 720px) {
+  .ctl3d { top: 120px; width: 150px; padding: 8px; gap: 5px; }
+  .ctl3d-ayuda { display: none; }
+}
 
 @media (max-width: 720px) {
   #panel { top: auto; left: 0; right: 0; bottom: 0; width: auto; max-height: 58vh; border-radius: 16px 16px 0 0; }

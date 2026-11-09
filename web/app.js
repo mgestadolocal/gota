@@ -12,7 +12,7 @@ const m3 = (v) => fmt(Math.round(v)) + " m³";
 
 const E = {
   anillo: null, vertices: [], cursor: null, dibujando: false,
-  archivo: null, g: null, an: null, capa: "escurrimiento", difMax: 1,
+  archivo: null, g: null, an: null, capa: "escurrimiento",
 };
 
 // ---------- mapa ----------
@@ -192,7 +192,7 @@ $("b-analizar").onclick = async () => {
     estado(`Calculando escurrimiento y pendientes (${fmt(g.w * g.h)} celdas)…`);
     const r = await pedir({ tipo: "analizar", w: g.w, h: g.h, z: g.z.slice(), mask: mask.slice(), dx: g.dx, dy: g.dy });
     E.g = g;
-    E.an = { ...r, mask, sombra: sombreado(g), dif: null };
+    E.an = { ...r, mask, sombra: sombreado(g) };
     estado("");
     if (!E.anillo) {
       const c = esquinas(g);
@@ -210,9 +210,7 @@ $("b-analizar").onclick = async () => {
 function limpiarResultados() {
   detenerLluvia();
   E.g = null; E.an = null;
-  for (const id of ["paso-resultados", "paso-cortes", "paso-exportar"]) $(id).hidden = true;
-  $("res-cortes").hidden = true;
-  document.querySelector('[data-capa="cortes"]').disabled = true;
+  for (const id of ["paso-resultados", "paso-exportar"]) $(id).hidden = true;
   if (mapa.getLayer("capa")) mapa.setLayoutProperty("capa", "visibility", "none");
   mapa.getSource("curvas")?.setData(vacio);
   if ($("t-3d").checked) { $("t-3d").checked = false; alternar3D(false); }
@@ -231,11 +229,8 @@ function mostrarResultados() {
     tarjeta(`${fmt(st.zmax - st.zmin, 1)} m`, "desnivel") +
     tarjeta(st.encArea ? ha(st.encArea) : "—", st.encArea ? `se encharca · ${m3(st.encVol)}` : "sin depresiones relevantes") +
     tarjeta(ha(st.accMax), "cuenca máx. que cruza el terreno");
-  for (const id of ["paso-resultados", "paso-cortes", "paso-exportar"]) $(id).hidden = false;
+  for (const id of ["paso-resultados", "paso-exportar"]) $(id).hidden = false;
   $("aviso-dsm").hidden = !E.g.esDSM;
-  $("res-cortes").hidden = true;
-  document.querySelector('[data-capa="cortes"]').disabled = true;
-  if (E.capa === "cortes") elegirCapa("escurrimiento");
   // curvas de nivel
   const eq = Math.max(equidistancia(st.zmax - st.zmin), E.g.dx >= 10 ? 1 : 0.25);
   E.eq = eq;
@@ -263,7 +258,7 @@ function pintarCapa() {
     $("leyenda").innerHTML = "";
     return;
   }
-  const op = { umbralCauce: umbral(), difMax: E.difMax };
+  const op = { umbralCauce: umbral() };
   const url = pintar(capa, E.g, E.an, op).toDataURL("image/png");
   const coordinates = esquinas(E.g);
   const src = mapa.getSource("capa");
@@ -286,11 +281,76 @@ $("umbral").oninput = () => { textoUmbral(); clearTimeout(E.tUmbral); E.tUmbral 
 $("t-curvas").onchange = actualizarCurvas;
 
 // ---------- 3D ----------
+function centroTerreno() {
+  if (E.anillo) {
+    const v = E.anillo.slice(0, -1);
+    return [v.reduce((s, p) => s + p[0], 0) / v.length, v.reduce((s, p) => s + p[1], 0) / v.length];
+  }
+  if (E.g) { const c = esquinas(E.g); return [(c[0][0] + c[2][0]) / 2, (c[0][1] + c[2][1]) / 2]; }
+  return mapa.getCenter().toArray();
+}
+
 function alternar3D(on) {
-  if (on) { mapa.setTerrain({ source: "dem", exaggeration: 1.6 }); mapa.easeTo({ pitch: 62, duration: 900 }); }
-  else { mapa.setTerrain(null); mapa.easeTo({ pitch: 0, bearing: 0, duration: 600 }); }
+  detenerOrbita();
+  $("ctl3d").hidden = !on;
+  if (on) {
+    mapa.setTerrain({ source: "dem", exaggeration: Number($("exagerar").value) });
+    mapa.easeTo({ center: centroTerreno(), pitch: 62, duration: 900 });
+  } else {
+    mapa.setTerrain(null);
+    mapa.easeTo({ pitch: 0, bearing: 0, duration: 600 });
+  }
 }
 $("t-3d").onchange = (e) => alternar3D(e.target.checked);
+
+// girar / inclinar / ver desde un punto cardinal (alrededor del centro de la pantalla)
+document.querySelectorAll("[data-girar]").forEach((b) => (b.onclick = () => {
+  detenerOrbita();
+  mapa.easeTo({ bearing: mapa.getBearing() + Number(b.dataset.girar), duration: 600 });
+}));
+document.querySelectorAll("[data-inclinar]").forEach((b) => (b.onclick = () => {
+  detenerOrbita();
+  mapa.easeTo({ pitch: Math.max(0, Math.min(80, mapa.getPitch() + Number(b.dataset.inclinar))), duration: 500 });
+}));
+// "desde el sur" = la cámara está al sur mirando al norte (rumbo 0)
+document.querySelectorAll("[data-desde]").forEach((b) => (b.onclick = () => {
+  detenerOrbita();
+  mapa.easeTo({ center: centroTerreno(), bearing: Number(b.dataset.desde), pitch: Math.max(mapa.getPitch(), 55), duration: 900 });
+}));
+$("centrar3d").onclick = () => {
+  detenerOrbita();
+  const c = E.anillo || (E.g && [...esquinas(E.g)]);
+  if (!c) return;
+  const xs = c.map((p) => p[0]), ys = c.map((p) => p[1]);
+  mapa.fitBounds([[Math.min(...xs), Math.min(...ys)], [Math.max(...xs), Math.max(...ys)]], { padding: 80, pitch: mapa.getPitch(), bearing: mapa.getBearing(), duration: 900 });
+};
+$("exagerar").oninput = (e) => {
+  $("exagerar-txt").textContent = fmt(e.target.value, 1);
+  if ($("t-3d").checked) mapa.setTerrain({ source: "dem", exaggeration: Number(e.target.value) });
+};
+
+// dar la vuelta alrededor del terreno; se detiene si el usuario toca el mapa
+const orbita = { raf: 0 };
+function detenerOrbita() {
+  cancelAnimationFrame(orbita.raf);
+  orbita.raf = 0;
+  $("orbitar").classList.remove("activo");
+  $("orbitar").textContent = "▶ Dar la vuelta";
+}
+$("orbitar").onclick = () => {
+  if (orbita.raf) return detenerOrbita();
+  $("orbitar").classList.add("activo");
+  $("orbitar").textContent = "■ Detener";
+  mapa.jumpTo({ center: centroTerreno() });
+  let t0 = performance.now();
+  const paso = (t) => {
+    mapa.setBearing((mapa.getBearing() + (t - t0) * 0.012) % 360);
+    t0 = t;
+    orbita.raf = requestAnimationFrame(paso);
+  };
+  orbita.raf = requestAnimationFrame(paso);
+};
+for (const ev of ["mousedown", "touchstart", "wheel"]) mapa.getCanvasContainer().addEventListener(ev, () => orbita.raf && detenerOrbita(), { passive: true });
 
 // ---------- simulación de lluvia (partículas que siguen el flujo D8) ----------
 const VX = [1, 1, 0, -1, -1, -1, 0, 1], VY = [0, 1, 1, 1, 0, -1, -1, -1];
@@ -356,48 +416,6 @@ $("t-lluvia").onchange = (e) => {
   if (encender) { e.target.checked = true; iniciarLluvia(); }
 };
 
-// ---------- corte y relleno ----------
-const modo = () => document.querySelector('input[name="modo"]:checked').value;
-document.querySelectorAll('input[name="modo"]').forEach((el) => (el.onchange = () => {
-  $("campos-pendiente").hidden = modo() !== "pendiente";
-  $("campo-cota").hidden = modo() === "ajuste";
-}));
-$("b-cortes").onclick = async () => {
-  if (!E.an) return;
-  $("b-cortes").disabled = true;
-  try {
-    const r = await pedir({ tipo: "cortes", modo: modo(), pendiente: $("pend").value, azimut: $("azimut").value, cota: modo() === "ajuste" ? "" : $("cota").value });
-    E.an.dif = r.dif;
-    E.an.cortes = r.stats;
-    const s = r.stats;
-    E.difMax = Math.max(0.1, s.maxCorte, s.maxRelleno);
-    const dirs = ["norte", "noreste", "este", "sureste", "sur", "suroeste", "oeste", "noroeste"];
-    const plano = s.azimut === null
-      ? `totalmente plano a ${fmt(s.cotaCentro, 1)} m s.n.m.`
-      : `con ${fmt(s.pendiente, 2)} % de pendiente bajando hacia el ${dirs[Math.round(s.azimut / 45) % 8]} (${fmt(s.cotaCentro, 1)} m s.n.m. en el centro)`;
-    const camiones = (v) => fmt(Math.ceil(v / 7));
-    const balance = Math.abs(s.neto) < Math.max(1, 0.01 * s.corte)
-      ? "La tierra que se saca alcanza justo para rellenar: no hay que traer ni botar tierra."
-      : s.neto > 0
-        ? `Sobran ${m3(s.neto)} que habría que sacar del predio (≈ ${camiones(s.neto)} camiones de 7 m³).`
-        : `Faltan ${m3(-s.neto)} que habría que traer de afuera (≈ ${camiones(-s.neto)} camiones de 7 m³).`;
-    $("res-cortes").innerHTML =
-      `<p class="explica">Para dejar el terreno ${plano}:</p>` +
-      tarjeta(m3(s.corte), `sacar (corte) en ${ha(s.aCorte)}`, "corte") +
-      tarjeta(m3(s.relleno), `poner (relleno) en ${ha(s.aRelleno)}`, "relleno") +
-      tarjeta(`${fmt(s.maxCorte, 2)} m`, "lo más profundo que se rebaja", "corte") +
-      tarjeta(`${fmt(s.maxRelleno, 2)} m`, "lo más alto que se rellena", "relleno") +
-      `<p class="explica">${balance} En el mapa, <b style="color:var(--corte)">rojo</b> = rebajar y <b style="color:var(--agua)">azul</b> = rellenar. Volúmenes geométricos, sin esponjamiento.</p>`;
-    $("res-cortes").hidden = false;
-    document.querySelector('[data-capa="cortes"]').disabled = false;
-    elegirCapa("cortes");
-  } catch (err) {
-    estado(err.message, true);
-  } finally {
-    $("b-cortes").disabled = false;
-  }
-};
-
 // ---------- exportar ----------
 function descargar(nombre, datos, tipo) {
   const url = URL.createObjectURL(datos instanceof Blob ? datos : new Blob([datos], { type: tipo }));
@@ -416,14 +434,13 @@ $("b-geojson").onclick = () => {
   const st = E.an.stats;
   const props = { fuente: E.g.fuente, area_ha: +(st.area / 1e4).toFixed(3), cota_min: +st.zmin.toFixed(2), cota_max: +st.zmax.toFixed(2),
     pendiente_media_pct: +st.pendMedia.toFixed(2), encharcamiento_ha: +(st.encArea / 1e4).toFixed(3), encharcamiento_m3: Math.round(st.encVol) };
-  if (E.an.cortes) Object.assign(props, { corte_m3: Math.round(E.an.cortes.corte), relleno_m3: Math.round(E.an.cortes.relleno) });
   const fc = { type: "FeatureCollection", features: [{ type: "Feature", properties: props, geometry: { type: "Polygon", coordinates: [contorno()] } }] };
   descargar("cota_terreno.geojson", JSON.stringify(fc, null, 1), "application/geo+json");
 };
 
 $("b-tif").onclick = async () => {
   const fuentes = { elevacion: [E.g.z, "elevacion_m"], pendiente: [E.an.pendiente, "pendiente_pct"], encharcamiento: [E.an.prof, "encharcamiento_m"],
-    escurrimiento: [E.an.acc, "area_aportante_m2"], cortes: [E.an.dif, "corte_relleno_m"], ninguna: [E.g.z, "elevacion_m"] };
+    escurrimiento: [E.an.acc, "area_aportante_m2"], ninguna: [E.g.z, "elevacion_m"] };
   const [arr, nombre] = fuentes[E.capa];
   const { w, h } = E.g;
   const { crs, x0, y0, rx, ry } = E.g.georef;
@@ -440,7 +457,7 @@ $("b-tif").onclick = async () => {
 };
 
 $("b-informe").onclick = () => {
-  const st = E.an.stats, c = E.an.cortes, g = E.g;
+  const st = E.an.stats, g = E.g;
   const [lon, lat] = mapa.getCenter().toArray();
   const img = mapa.getCanvas().toDataURL("image/jpeg", 0.9);
   const fila = (a, b) => `<tr><td>${a}</td><td>${b}</td></tr>`;
@@ -454,7 +471,6 @@ $("b-informe").onclick = () => {
     <table>${CLASES_PEND.map((k, i) => fila(k.txt, `${fmt(100 * st.clases[i], 1)} % · ${ha(st.clases[i] * st.area)}`)).join("")}</table>
     <h2>Agua</h2>
     <table>${fila("Zonas que se encharcan (≥ 5 cm)", st.encArea ? ha(st.encArea) : "no se detectan")}${fila("Volumen que pueden retener", m3(st.encVol))}${fila("Profundidad máxima", `${fmt(st.encMax, 2)} m`)}${fila("Mayor cuenca que cruza el terreno", ha(st.accMax))}</table>
-    ${c ? `<h2>Movimiento de tierra</h2><table>${fila("Superficie de diseño", { nivelado: "plano horizontal", ajuste: "plano de mejor ajuste", pendiente: "plano con pendiente dada" }[c.modo])}${fila("Pendiente del plano", `${fmt(c.pendiente, 2)} %`)}${fila("Cota en el centro", `${fmt(c.cotaCentro, 2)} m`)}${fila("Corte", `${m3(c.corte)} en ${ha(c.aCorte)} (máx. ${fmt(c.maxCorte, 2)} m)`)}${fila("Relleno", `${m3(c.relleno)} en ${ha(c.aRelleno)} (máx. ${fmt(c.maxRelleno, 2)} m)`)}${fila("Balance", c.neto >= 0 ? `sobran ${m3(c.neto)}` : `faltan ${m3(-c.neto)}`)}</table><p class="nota">Volúmenes geométricos, sin esponjamiento ni compactación.</p>` : ""}
     <p class="nota">${g.esDSM ? "Copernicus GLO-30 es un modelo digital de superficie de ~30 m: incluye vegetación y construcciones y no capta detalles menores a la celda. " : ""}Resultado referencial de prediagnóstico; no reemplaza un levantamiento topográfico ni un estudio hidrológico.</p>`;
   window.print();
 };

@@ -1,8 +1,7 @@
-// Cálculo hidrológico y de movimiento de tierra (Web Worker).
+// Cálculo hidrológico y de pendientes (Web Worker).
 // Grilla: w × h celdas, z Float32 (NaN = sin dato), mask Uint8 (1 = dentro del polígono),
 // dx/dy = tamaño de celda en metros. La fila crece hacia el sur.
 
-let G = null;
 
 // Vecinos D8: E, SE, S, SO, O, NO, N, NE
 const VX = [1, 1, 0, -1, -1, -1, 0, 1];
@@ -12,12 +11,8 @@ self.onmessage = (e) => {
   const m = e.data;
   try {
     if (m.tipo === "analizar") {
-      G = { w: m.w, h: m.h, z: m.z, mask: m.mask, dx: m.dx, dy: m.dy };
-      const r = analizar(G);
+      const r = analizar({ w: m.w, h: m.h, z: m.z, mask: m.mask, dx: m.dx, dy: m.dy });
       self.postMessage({ tipo: "analisis", ...r }, [r.pendiente.buffer, r.prof.buffer, r.acc.buffer, r.dir.buffer]);
-    } else if (m.tipo === "cortes") {
-      const r = cortes(G, m);
-      self.postMessage({ tipo: "cortes", ...r }, [r.dif.buffer]);
     }
   } catch (err) {
     self.postMessage({ tipo: "error", mensaje: String((err && err.message) || err) });
@@ -199,77 +194,6 @@ function analizar({ w, h, z, mask, dx, dy }) {
       celdas: nc, area: nc * A, zmin, zmax, zmedia: zsum / nc, pendMedia: psum / nc,
       clases: clases.map((x) => x / nc), limites: CLASES.slice(0, -1),
       encArea, encVol, encMax, accMax,
-    },
-  };
-}
-
-// Movimiento de tierra contra un plano de diseño z = a + b·x + c·y
-// (x hacia el este, y hacia el norte, en metros desde el centroide del polígono).
-function cortes(Gr, p) {
-  if (!Gr) throw new Error("Primero analiza el terreno.");
-  const { w, h, z, mask, dx, dy } = Gr;
-  const n = w * h;
-  const A = dx * dy;
-
-  let nc = 0, sc = 0, sr = 0;
-  for (let i = 0; i < n; i++) if (mask[i] && !Number.isNaN(z[i])) { nc++; sc += i % w; sr += (i / w) | 0; }
-  const cc0 = sc / nc, rc0 = sr / nc;
-  const X = (i) => ((i % w) - cc0) * dx;
-  const Y = (i) => -(((i / w) | 0) - rc0) * dy;
-
-  let b = 0, c = 0;
-  if (p.modo === "ajuste") {
-    // mínimos cuadrados (x e y centrados → sistema 2×2 para b, c)
-    let sxx = 0, syy = 0, sxy = 0, sxz = 0, syz = 0, zm = 0;
-    for (let i = 0; i < n; i++) if (mask[i] && !Number.isNaN(z[i])) zm += z[i];
-    zm /= nc;
-    for (let i = 0; i < n; i++) {
-      if (!mask[i] || Number.isNaN(z[i])) continue;
-      const x = X(i), y = Y(i), zz = z[i] - zm;
-      sxx += x * x; syy += y * y; sxy += x * y; sxz += x * zz; syz += y * zz;
-    }
-    const det = sxx * syy - sxy * sxy;
-    if (Math.abs(det) > 1e-9) { b = (sxz * syy - syz * sxy) / det; c = (syz * sxx - sxz * sxy) / det; }
-  } else if (p.modo === "pendiente") {
-    const s = (Number(p.pendiente) || 0) / 100;
-    const t = ((Number(p.azimut) || 0) * Math.PI) / 180; // dirección hacia donde BAJA el plano
-    b = -s * Math.sin(t);
-    c = -s * Math.cos(t);
-  }
-
-  // cota en el centroide: fija si el usuario la da; si no, la que equilibra corte y relleno
-  let a;
-  const fija = p.cota !== null && p.cota !== "" && p.cota !== undefined && Number.isFinite(Number(p.cota));
-  if (fija && p.modo !== "ajuste") a = Number(p.cota);
-  else {
-    let s = 0;
-    for (let i = 0; i < n; i++) if (mask[i] && !Number.isNaN(z[i])) s += z[i] - b * X(i) - c * Y(i);
-    a = s / nc;
-  }
-
-  const dif = new Float32Array(n).fill(NaN);
-  let corte = 0, relleno = 0, aCorte = 0, aRelleno = 0, maxCorte = 0, maxRelleno = 0;
-  let dmin = Infinity, dmax = -Infinity;
-  for (let i = 0; i < n; i++) {
-    if (!mask[i] || Number.isNaN(z[i])) continue;
-    const zd = a + b * X(i) + c * Y(i);
-    const d = z[i] - zd; // + corte, − relleno
-    dif[i] = d;
-    if (zd < dmin) dmin = zd;
-    if (zd > dmax) dmax = zd;
-    // los volúmenes usan todo; las áreas ignoran diferencias menores a 1 cm
-    if (d > 0) { corte += d * A; if (d >= 0.01) aCorte += A; if (d > maxCorte) maxCorte = d; }
-    else if (d < 0) { relleno += -d * A; if (d <= -0.01) aRelleno += A; if (-d > maxRelleno) maxRelleno = -d; }
-  }
-  const pend = 100 * Math.hypot(b, c);
-  let az = (Math.atan2(-b, -c) * 180) / Math.PI;
-  if (az < 0) az += 360;
-
-  return {
-    dif,
-    stats: {
-      modo: p.modo, corte, relleno, neto: corte - relleno, aCorte, aRelleno, maxCorte, maxRelleno,
-      cotaCentro: a, pendiente: pend, azimut: pend > 1e-6 ? az : null, cotaMin: dmin, cotaMax: dmax,
     },
   };
 }

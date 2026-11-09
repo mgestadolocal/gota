@@ -53,7 +53,6 @@
           <button data-capa="encharcamiento">Encharcamiento</button>
           <button data-capa="pendiente">Pendiente</button>
           <button data-capa="elevacion">Elevación</button>
-          <button data-capa="cortes" disabled>Corte/relleno</button>
           <button data-capa="ninguna">Satélite</button>
         </div>
         <div id="control-umbral" class="control">
@@ -69,39 +68,8 @@
         <p id="aviso-dsm" class="aviso" hidden>Copernicus es un modelo de <b>superficie</b>: incluye árboles y edificios, y su celda es de ~30 m. Sirve para un prediagnóstico; para nivelar o diseñar el drenaje, sube un DEM de dron o LiDAR.</p>
       </section>
 
-      <section class="paso" id="paso-cortes" hidden>
-        <h2><span>3</span>Si quieres emparejar el terreno</h2>
-        <p class="ayuda">¿Cuánta tierra hay que sacar de las partes altas (<b style="color:var(--corte)">corte</b>) y cuánta poner en las bajas (<b style="color:var(--agua)">relleno</b>) para dejar el polígono parejo? Elige cómo quieres que quede:</p>
-        <div class="opciones" role="radiogroup">
-          <label class="opcion"><input type="radio" name="modo" value="nivelado" checked />
-            <span><b>Totalmente plano</b><small>Una cancha, galpón o plataforma para construir.</small></span></label>
-          <label class="opcion"><input type="radio" name="modo" value="pendiente" />
-            <span><b>Con una pendiente suave</b><small>Para riego por surcos o tendido, o para que el agua lluvia escurra hacia un lado.</small></span></label>
-          <label class="opcion"><input type="radio" name="modo" value="ajuste" />
-            <span><b>Parejo, moviendo lo mínimo</b><small>Mantiene la inclinación natural del terreno y solo elimina lomos y hoyos.</small></span></label>
-        </div>
-        <div id="campos-pendiente" class="fila" hidden>
-          <label class="campo">Pendiente (%)<small>0,1–0,5 % típico en riego</small><input id="pend" type="number" step="0.05" min="0" max="30" value="0.2" /></label>
-          <label class="campo">El agua corre hacia el<small>&nbsp;</small>
-            <select id="azimut">
-              <option value="0">Norte</option><option value="45">Noreste</option><option value="90">Este</option><option value="135">Sureste</option>
-              <option value="180">Sur</option><option value="225">Suroeste</option><option value="270" selected>Oeste</option><option value="315">Noroeste</option>
-            </select>
-          </label>
-        </div>
-        <details id="campo-cota" class="avanzado">
-          <summary>Opción avanzada: fijar la altura final</summary>
-          <label class="campo">Altura del terreno terminado en el centro (m s.n.m.)
-            <small>Si la dejas vacía, se calcula la altura en que la tierra que sacas alcanza justo para rellenar (no sobra ni falta). Si la fijas, verás cuánta tierra sobra o falta.</small>
-            <input id="cota" type="number" step="0.1" placeholder="automática" />
-          </label>
-        </details>
-        <button id="b-cortes" class="primario ancho">Calcular cuánta tierra mover</button>
-        <div id="res-cortes" class="tarjetas" hidden></div>
-      </section>
-
       <section class="paso" id="paso-exportar" hidden>
-        <h2><span>4</span>Llevártelo</h2>
+        <h2><span>3</span>Llevártelo</h2>
         <div class="botones">
           <button id="b-informe" class="secundario">Informe PDF</button>
           <button id="b-tif" class="secundario">GeoTIFF de la capa</button>
@@ -115,6 +83,32 @@
       </footer>
     </div>
   </aside>
+
+  <div id="ctl3d" class="ctl3d" hidden>
+    <div class="ctl3d-titulo">Vista 3D</div>
+    <div class="ctl3d-fila" title="Girar">
+      <button data-girar="-45" aria-label="Girar a la izquierda">⟲</button>
+      <span>Girar</span>
+      <button data-girar="45" aria-label="Girar a la derecha">⟳</button>
+    </div>
+    <div class="ctl3d-fila" title="Inclinar">
+      <button data-inclinar="-15" aria-label="Ver más desde arriba">▲</button>
+      <span>Inclinar</span>
+      <button data-inclinar="15" aria-label="Ver más de lado">▼</button>
+    </div>
+    <div class="ctl3d-sub">Ver desde el</div>
+    <div class="ctl3d-rosa">
+      <button data-desde="180">N</button>
+      <button data-desde="270">E</button>
+      <button data-desde="0">S</button>
+      <button data-desde="90">O</button>
+    </div>
+    <button id="orbitar" class="ctl3d-ancho">▶ Dar la vuelta</button>
+    <label class="ctl3d-sub" for="exagerar">Relieve ×<b id="exagerar-txt">1,6</b></label>
+    <input id="exagerar" type="range" min="1" max="4" step="0.1" value="1.6" />
+    <button id="centrar3d" class="ctl3d-ancho">◎ Centrar en el terreno</button>
+    <p class="ctl3d-ayuda">También: clic derecho y arrastrar (o Ctrl + arrastrar). En celular, dos dedos.</p>
+  </div>
 
   <div id="informe" aria-hidden="true"></div>
 

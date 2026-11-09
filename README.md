@@ -5,8 +5,7 @@ Dibuja un polígono (o sube un DEM de dron/LiDAR) y obtén, en el navegador:
 - **Escurrimiento**: por dónde corre el agua (flujo D8 sobre superficie rellenada, área aportante).
 - **Encharcamiento**: depresiones sin salida, superficie y volumen que retienen.
 - **Pendientes** por clase, **elevación** con sombreado y **curvas de nivel**.
-- **Movimiento de tierra**: corte/relleno contra un plano horizontal, de mejor ajuste o con pendiente dada.
-- **Vista 3D** y **simulación de lluvia** (partículas que siguen el flujo).
+- **Vista 3D** con controles para girar, inclinar, ver desde N/E/S/O, dar la vuelta y exagerar el relieve, y **simulación de lluvia** (partículas que siguen el flujo).
 - Exporta informe (PDF vía imprimir), GeoTIFF Float32 de la capa y polígono GeoJSON.
 
 ## Datos
@@ -27,4 +26,4 @@ secretos `CLOUDFLARE_API_TOKEN` y `CLOUDFLARE_ACCOUNT_ID`, variable `ALLOWED_ORI
 
 ## Límites
 Copernicus es un modelo de superficie (incluye árboles y edificios) de ~30 m: sirve para prediagnóstico,
-no para nivelar potreros. Volúmenes geométricos sin esponjamiento. No reemplaza topografía ni estudio hidrológico.
+no para nivelar potreros. No reemplaza topografía ni estudio hidrológico.
