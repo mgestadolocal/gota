@@ -220,6 +220,16 @@ async function admin(req, env, cors, ruta) {
     await env.DATOS.put(`usuario:${correo}`, JSON.stringify(u));
     return json({ ok: true }, 200, cors);
   }
+  if (ruta === "/admin/demos/borrar" && req.method === "POST") {
+    const b = await cuerpo(req);
+    await env.DATOS.delete(`demo:${limpiar(b?.id, 40)}`);
+    return json({ ok: true }, 200, cors);
+  }
+  if (ruta === "/admin/usuarios/borrar" && req.method === "POST") {
+    const b = await cuerpo(req);
+    await env.DATOS.delete(`usuario:${normalizarCorreo(b?.correo)}`);
+    return json({ ok: true }, 200, cors);
+  }
   return json({ error: "Ruta desconocida." }, 404, cors);
 }
 

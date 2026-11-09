@@ -23,6 +23,9 @@
     td small { color: var(--suave); display: block; margin-top: 3px; white-space: pre-wrap; }
     .mini { font: 700 12.5px Manrope; padding: 6px 11px; border-radius: 9px; border: 1px solid var(--linea-2); background: rgba(92,200,255,.06); color: var(--texto); cursor: pointer; white-space: nowrap; }
     .mini:hover { border-color: var(--agua); }
+    .mini.rojo { border-color: rgba(255,120,90,.35); color: #ffb39e; background: rgba(255,120,90,.06); }
+    .mini.rojo:hover { border-color: #ff9c7a; }
+    .acc { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
     .etq { font: 600 11px var(--mono); padding: 3px 9px; border-radius: 20px; border: 1px solid var(--linea-2); color: var(--agua-2); }
     .etq.gris { color: var(--tenue); border-color: var(--linea); }
     .crear { display: grid; grid-template-columns: 1.2fr 1fr 1fr auto; gap: 10px; align-items: end; margin-bottom: 20px; }
@@ -101,10 +104,11 @@
         <td><b>${esc(d.nombre)}</b><small>${esc(d.empresa)}\n<a href="mailto:${esc(d.correo)}" style="color:var(--agua)">${esc(d.correo)}</a>${d.telefono ? " · " + esc(d.telefono) : ""}</small></td>
         <td class="ocultable">${esc(d.rubro)}<small>${esc(d.mensaje || "—")}</small></td>
         <td><span class="etq ${d.estado === "nueva" ? "" : "gris"}">${esc(d.estado)}</span></td>
-        <td style="display:flex;gap:6px;flex-wrap:wrap">
+        <td><div class="acc">
           <button class="mini" data-cuenta="${esc(d.correo)}" data-nombre="${esc(d.nombre)}" data-empresa="${esc(d.empresa)}">Crear cuenta</button>
           <button class="mini" data-estado="${esc(d.id)}" data-valor="${d.estado === "nueva" ? "contactada" : "nueva"}">${d.estado === "nueva" ? "Marcar contactada" : "Marcar nueva"}</button>
-        </td></tr>`).join("");
+          <button class="mini rojo" data-borrar-demo="${esc(d.id)}" data-nombre="${esc(d.nombre)}">Eliminar</button>
+        </div></td></tr>`).join("");
     }
     async function cargarCuentas() {
       const { usuarios } = await api("/admin/usuarios");
@@ -113,10 +117,11 @@
         <td><b>${esc(u.nombre || u.id)}</b><small>${esc(u.id)}${u.empresa ? " · " + esc(u.empresa) : ""}</small></td>
         <td class="ocultable">${fecha(u.creado)}<small>${u.ultimoIngreso ? "último ingreso: " + fecha(u.ultimoIngreso) : "sin ingresos"}</small></td>
         <td><span class="etq ${u.activo ? "" : "gris"}">${u.activo ? "activa" : "desactivada"}</span></td>
-        <td style="display:flex;gap:6px;flex-wrap:wrap">
+        <td><div class="acc">
           <button class="mini" data-clave="${esc(u.id)}">Nueva clave</button>
           <button class="mini" data-activa="${esc(u.id)}" data-valor="${u.activo ? "0" : "1"}">${u.activo ? "Desactivar" : "Activar"}</button>
-        </td></tr>`).join("");
+          <button class="mini rojo" data-borrar-cuenta="${esc(u.id)}">Eliminar</button>
+        </div></td></tr>`).join("");
     }
     function mostrarInvitacion(correo, nombre, clave) {
       const url = new URL("ingresar.html", location.href).href;
@@ -166,6 +171,12 @@
           if (!confirm(`¿Generar una clave nueva para ${b.dataset.clave}? La anterior deja de funcionar.`)) return;
           const r = await api("/admin/usuarios/clave", "POST", { correo: b.dataset.clave });
           mostrarInvitacion(r.correo, "", r.clave);
+        } else if (b.dataset.borrarDemo) {
+          if (!confirm(`¿Eliminar la solicitud de ${b.dataset.nombre}? No se puede deshacer.`)) return;
+          await api("/admin/demos/borrar", "POST", { id: b.dataset.borrarDemo }); b.closest("tr").remove();
+        } else if (b.dataset.borrarCuenta) {
+          if (!confirm(`¿Eliminar la cuenta ${b.dataset.borrarCuenta}? Ya no podrá ingresar. No se puede deshacer.`)) return;
+          await api("/admin/usuarios/borrar", "POST", { correo: b.dataset.borrarCuenta }); b.closest("tr").remove();
         } else if (b.dataset.activa) {
           await api("/admin/usuarios/estado", "POST", { correo: b.dataset.activa, activo: b.dataset.valor === "1" }); await cargarCuentas();
         }
