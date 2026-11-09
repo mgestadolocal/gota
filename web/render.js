@@ -28,6 +28,7 @@ export const CLASES_PEND = [
   { hasta: Infinity, color: "#7f0000", txt: "> 45 % escarpado" },
 ];
 const PEND_RGB = CLASES_PEND.map((c) => hex(c.color));
+const AGUA_QUIETA = hex("#7cc4ff");
 const AGUA = [[0, hex("#bfe6ff")], [0.4, hex("#4aa8ff")], [1, hex("#0b3d91")]];
 
 // Sombreado (hillshade) normalizado 0..1
@@ -94,7 +95,10 @@ export function pintar(capa, g, a, opciones = {}) {
       if (d >= 0.05) { col = rampa(AGUA, Math.min(1, d / 1.5)); al = 0.55 + 0.4 * Math.min(1, d / 0.8); }
     } else if (capa === "escurrimiento") {
       const v = a.acc[i];
-      if (v >= umbral) {
+      // sobre agua quieta (pozas o lagunas) no hay cauce: se pinta como lámina de agua
+      const quieta = (T ? T.profT[i] : a.prof[i]) >= 0.05;
+      if (quieta) { col = AGUA_QUIETA; al = 0.55; }
+      else if (v >= umbral) {
         const t = T
           ? (Math.log10(Math.max(T.qp[i], 0.005)) - qMin) / (qMax - qMin || 1)
           : (Math.log10(v) - accMin) / (accMax - accMin || 1);

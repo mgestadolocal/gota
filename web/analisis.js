@@ -270,7 +270,10 @@ function tormenta(Ur, p) {
     const k = comp[c];
     if (k >= 0 && (rec < 0 || comp[rec] !== k)) {
       const ret = Math.min(W[c], libre[k]);
+      // lo que queda retenido no llega aguas abajo: el área que aporta al caudal se reduce en la misma proporción
+      const frac = W[c] > 0 ? (W[c] - ret) / W[c] : 1;
       libre[k] -= ret; guardado[k] += ret; W[c] -= ret;
+      area[c] *= frac; cnA[c] *= frac;
     }
     if (rec < 0) { if (mask[c]) saleDelPoligono += W[c]; continue; }
     if (mask[c] && !mask[rec]) saleDelPoligono += W[c];
@@ -304,7 +307,7 @@ function tormenta(Ur, p) {
     const H = Math.max(zIni[i] - z[i], 0.001 * Lkm * 1000, 0.1);
     const tc = Math.max(1 / 6, 0.95 * Math.pow((Lkm * Lkm * Lkm) / H, 0.385)); // horas, mínimo 10 min
     const iMMh = PD(tc) / tc;
-    const C = qSCS(P24, cnA[i] / area[i]) / P24;
+    const C = area[i] > 0 ? qSCS(P24, cnA[i] / area[i]) / P24 : 0;
     qp[i] = (C * iMMh * (area[i] / 1e6)) / 3.6;
   }
 
