@@ -1,9 +1,17 @@
-// Intermediario de Cota: el bucket público de Copernicus DEM (AWS Open Data) responde
-// lecturas por rango pero no envía CORS, así que el navegador no puede leerlo directo.
-// Este Worker solo reenvía lecturas por rango de teselas GLO-30 y agrega CORS.
+// Intermediario de Cota: los buckets públicos de Copernicus DEM y ESA WorldCover (AWS Open Data)
+// responden lecturas por rango pero no envían CORS, así que el navegador no puede leerlos directo.
+// Este Worker solo reenvía lecturas por rango de sus teselas y agrega CORS.
 
-const BUCKET = "https://copernicus-dem-30m.s3.eu-central-1.amazonaws.com";
-const TESELA = /^Copernicus_DSM_COG_10_[NS]\d{2}_00_[EW]\d{3}_00_DEM$/;
+const FUENTES = {
+  cop: {
+    re: /^Copernicus_DSM_COG_10_[NS]\d{2}_00_[EW]\d{3}_00_DEM$/,
+    url: (n) => `https://copernicus-dem-30m.s3.eu-central-1.amazonaws.com/${n}/${n}.tif`,
+  },
+  wc: {
+    re: /^ESA_WorldCover_10m_2021_v200_[NS]\d{2}[EW]\d{3}_Map$/,
+    url: (n) => `https://esa-worldcover.s3.eu-central-1.amazonaws.com/v200/2021/map/${n}.tif`,
+  },
+};
 const RANGO = /^bytes=\d{1,10}-\d{0,10}$/;
 
 function cabecerasCors(req, env) {
@@ -28,13 +36,14 @@ export default {
       return new Response(null, { status: 204, headers: { ...cors, "Access-Control-Max-Age": "86400" } });
     }
     if (url.pathname === "/") {
-      return new Response(JSON.stringify({ servicio: "cota", rutas: ["/cop/{tesela}"] }), {
+      return new Response(JSON.stringify({ servicio: "cota", rutas: ["/cop/{tesela}", "/wc/{tesela}"] }), {
         headers: { ...cors, "Content-Type": "application/json" },
       });
     }
 
-    const m = url.pathname.match(/^\/cop\/([^/]+)$/);
-    if (!m || !TESELA.test(m[1])) return new Response("no encontrado", { status: 404, headers: cors });
+    const m = url.pathname.match(/^\/(cop|wc)\/([^/]+)$/);
+    const fuente = m && FUENTES[m[1]];
+    if (!fuente || !fuente.re.test(m[2])) return new Response("no encontrado", { status: 404, headers: cors });
     if (req.method !== "GET" && req.method !== "HEAD") return new Response("método", { status: 405, headers: cors });
 
     // Solo lecturas parciales: evita que alguien use el Worker para bajar teselas completas (40 MB c/u).
@@ -43,7 +52,7 @@ export default {
       return new Response("se requiere un único rango de bytes", { status: 416, headers: cors });
     }
 
-    const arriba = await fetch(`${BUCKET}/${m[1]}/${m[1]}.tif`, {
+    const arriba = await fetch(fuente.url(m[2]), {
       method: req.method,
       headers: rango ? { Range: rango } : {},
     });

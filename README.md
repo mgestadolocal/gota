@@ -6,6 +6,8 @@ Dibuja un polígono (o sube un DEM de dron/LiDAR) y obtén, en el navegador:
 - **Encharcamiento**: depresiones sin salida, superficie y volumen que retienen.
 - **Pendientes** por clase, **elevación** con sombreado y **curvas de nivel**.
 - **Vista 3D** con controles para girar, inclinar, ver desde N/E/S/O, dar la vuelta y exagerar el relieve, y **simulación de lluvia** (partículas que siguen el flujo).
+- **Tormenta de diseño** (2–100 años): lluvia de GPEX en el punto, escorrentía por número de curva SCS con cobertura
+  ESA WorldCover y tipo de suelo, llenado y desborde de depresiones según el volumen, caudal punta por cauce (método racional).
 - Exporta informe (PDF vía imprimir), GeoTIFF Float32 de la capa y polígono GeoJSON.
 
 ## Datos
@@ -13,6 +15,9 @@ Dibuja un polígono (o sube un DEM de dron/LiDAR) y obtén, en el navegador:
   así que pasa por un Cloudflare Worker (`worker/`) que solo reenvía lecturas por rango.
 - **GeoTIFF del usuario**: cualquier EPSG (UTM WGS84/SIRGAS conocidos; otros vía epsg.io). Se procesa localmente,
   no se sube a ningún servidor. Se remuestrea a ≤ 4 M celdas.
+- **GPEX** (Gründemann et al. 2021, CC BY 4.0, doi:10.4121/12764429.v4): niveles de retorno de lluvia 3 h–72 h,
+  0,1°, recortado a Chile en `web/data/gpex/` con `tools/gpex_chile.py` (descarga: `tools/bajar_gpex.py`).
+- **ESA WorldCover 2021** (10 m, CC BY 4.0) vía el Worker (`/wc/`).
 - Relieve 3D: Terrain Tiles (AWS, terrarium). Imagen: Esri World Imagery.
 
 ## Estructura

@@ -1,4 +1,4 @@
-"""Servidor de prueba: sirve web/ y replica la ruta /cop/{tesela} del Worker (lecturas por rango a Copernicus).
+"""Servidor de prueba: sirve web/ y replica las rutas /cop/ y /wc/ del Worker (lecturas por rango a Copernicus y WorldCover).
 Uso: python tools/servidor_local.py   ->  http://localhost:8790/?api=http://localhost:8790
 """
 import re
@@ -8,8 +8,13 @@ from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
 from pathlib import Path
 
 WEB = Path(__file__).resolve().parent.parent / "web"
-BUCKET = "https://copernicus-dem-30m.s3.eu-central-1.amazonaws.com"
-TESELA = re.compile(r"^/cop/(Copernicus_DSM_COG_10_[NS]\d{2}_00_[EW]\d{3}_00_DEM)$")
+FUENTES = {
+    "cop": (re.compile(r"^Copernicus_DSM_COG_10_[NS]\d{2}_00_[EW]\d{3}_00_DEM$"),
+            "https://copernicus-dem-30m.s3.eu-central-1.amazonaws.com/{n}/{n}.tif"),
+    "wc": (re.compile(r"^ESA_WorldCover_10m_2021_v200_[NS]\d{2}[EW]\d{3}_Map$"),
+           "https://esa-worldcover.s3.eu-central-1.amazonaws.com/v200/2021/map/{n}.tif"),
+}
+RUTA = re.compile(r"^/(cop|wc)/([^/]+)$")
 RANGO = re.compile(r"^bytes=\d{1,10}-\d{0,10}$")
 
 
@@ -30,14 +35,13 @@ class Manejador(SimpleHTTPRequestHandler):
         self.end_headers()
 
     def do_GET(self):
-        m = TESELA.match(self.path.split("?")[0])
-        if not m:
+        m = RUTA.match(self.path.split("?")[0])
+        if not m or not FUENTES[m.group(1)][0].match(m.group(2)):
             return super().do_GET()
         rango = self.headers.get("Range", "")
         if not RANGO.match(rango):
             self.send_response(416); self.end_headers(); return
-        nombre = m.group(1)
-        req = urllib.request.Request(f"{BUCKET}/{nombre}/{nombre}.tif", headers={"Range": rango})
+        req = urllib.request.Request(FUENTES[m.group(1)][1].format(n=m.group(2)), headers={"Range": rango})
         try:
             with urllib.request.urlopen(req, timeout=30) as r:
                 cuerpo = r.read()

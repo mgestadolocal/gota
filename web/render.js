@@ -1,5 +1,6 @@
 // Pintado de capas (canvas → imagen sobre el mapa), curvas de nivel y leyendas.
 import { afin } from "./dem.js";
+import { CLASES_WC } from "./cobertura.js";
 
 const FUERA = 0.28; // opacidad relativa fuera del polígono (contexto)
 
@@ -71,6 +72,9 @@ export function pintar(capa, g, a, opciones = {}) {
   const umbral = opciones.umbralCauce || 5000; // m²
   const accMax = Math.log10(Math.max(umbral * 10, st.accMax));
   const accMin = Math.log10(umbral);
+  const T = a.tormenta;
+  const qMin = Math.log10(0.005), qMax = Math.log10(Math.max(0.05, T ? T.stats.qMax : 1));
+  const WC = Object.fromEntries(Object.entries(CLASES_WC).map(([k, v]) => [k, hex(v.color)]));
 
   for (let i = 0; i < w * h; i++) {
     if (Number.isNaN(z[i])) continue;
@@ -86,14 +90,19 @@ export function pintar(capa, g, a, opciones = {}) {
       while (a.pendiente[i] >= CLASES_PEND[j].hasta) j++;
       col = PEND_RGB[j]; al = 0.78;
     } else if (capa === "encharcamiento") {
-      const d = a.prof[i];
+      const d = T ? T.profT[i] : a.prof[i];
       if (d >= 0.05) { col = rampa(AGUA, Math.min(1, d / 1.5)); al = 0.55 + 0.4 * Math.min(1, d / 0.8); }
     } else if (capa === "escurrimiento") {
       const v = a.acc[i];
       if (v >= umbral) {
-        const t = (Math.log10(v) - accMin) / (accMax - accMin || 1);
+        const t = T
+          ? (Math.log10(Math.max(T.qp[i], 0.005)) - qMin) / (qMax - qMin || 1)
+          : (Math.log10(v) - accMin) / (accMax - accMin || 1);
         col = rampa(AGUA, 0.25 + 0.75 * t); al = 0.45 + 0.55 * Math.min(1, t * 1.4);
       }
+    } else if (capa === "cobertura" && a.clase) {
+      const c = WC[a.clase[i]];
+      if (c) { col = c; al = 0.72; }
     }
     if (!col) continue;
     px[i * 4] = col[0]; px[i * 4 + 1] = col[1]; px[i * 4 + 2] = col[2];
@@ -157,7 +166,16 @@ export function leyenda(capa, a, opciones = {}) {
   if (capa === "elevacion") return `<b>Elevación (m s.n.m.)</b>${barra(["#2f6b3a", "#7da35a", "#d9c98a", "#b07a4a", "#f2ece4"], fmt(st.zmin), fmt(st.zmax))}`;
   if (capa === "pendiente")
     return `<b>Pendiente</b>` + CLASES_PEND.map((c, i) => `<div class="ley-fila"><i style="background:${c.color}"></i>${c.txt}<span>${fmt(100 * st.clases[i])} %</span></div>`).join("");
-  if (capa === "encharcamiento") return `<b>Encharcamiento (profundidad)</b>${barra(["#bfe6ff", "#4aa8ff", "#0b3d91"], "5 cm", "≥ 1,5 m")}<p class="ley-nota">Depresiones sin salida: donde el agua se junta si llueve fuerte.</p>`;
+  const T = a.tormenta;
+  if (capa === "encharcamiento" && T) return `<b>Dónde se junta el agua · lluvia de ${opciones.retorno} años</b>${barra(["#bfe6ff", "#4aa8ff", "#0b3d91"], "5 cm", "≥ 1,5 m")}<p class="ley-nota">Pozas que se forman con esta tormenta. Algunas depresiones no alcanzan a llenarse.</p>`;
+  if (capa === "escurrimiento" && T) return `<b>Caudal máximo · lluvia de ${opciones.retorno} años</b>${barra(["#8fd0ff", "#4aa8ff", "#0b3d91"], "0,005 m³/s", fmt(Math.max(0.05, T.stats.qMax), 2) + " m³/s")}<p class="ley-nota">Cuánta agua pasa por cada cauce en el peak de la tormenta (1 m³/s = 1.000 litros por segundo).</p>`;
+  if (capa === "cobertura" && a.clase) {
+    const n = {}; let tot = 0;
+    for (let i = 0; i < a.clase.length; i++) if (a.mask[i] && a.clase[i]) { n[a.clase[i]] = (n[a.clase[i]] || 0) + 1; tot++; }
+    return `<b>Cobertura del suelo (ESA WorldCover 2021)</b>` + Object.entries(n).sort((x, y) => y[1] - x[1])
+      .map(([k, v]) => `<div class="ley-fila"><i style="background:${CLASES_WC[k].color}"></i>${CLASES_WC[k].nombre}<span>${fmt((100 * v) / tot)} %</span></div>`).join("");
+  }
+  if (capa === "encharcamiento") return `<b>Encharcamiento (profundidad)</b>${barra(["#bfe6ff", "#4aa8ff", "#0b3d91"], "5 cm", "≥ 1,5 m")}<p class="ley-nota">Depresiones sin salida, llenas hasta el borde (lluvia sin límite). Simula una tormenta para ver cuánto se llenan de verdad.</p>`;
   if (capa === "escurrimiento") return `<b>Escurrimiento (área aportante)</b>${barra(["#8fd0ff", "#4aa8ff", "#0b3d91"], fmt((opciones.umbralCauce || 5000) / 10000, 1) + " ha", fmt(st.accMax / 10000, 0) + " ha")}<p class="ley-nota">Por dónde corre el agua. Más oscuro = más superficie drena por ahí.</p>`;
   return "";
 }

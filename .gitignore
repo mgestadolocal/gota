@@ -3,3 +3,5 @@ __pycache__/
 *.pyc
 .wrangler/
 node_modules/
+data_build/
+.venv/

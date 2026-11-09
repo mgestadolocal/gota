@@ -76,6 +76,9 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
 .tarjeta.corte b { color: var(--corte); }
 .tarjeta.relleno b { color: var(--agua); }
 .tarjeta.ancha { grid-column: 1 / -1; }
+.tarjeta.agua b { color: var(--agua); }
+.marca-q { display: block; background: #0b3d91; color: #fff; font: 700 12px Manrope, sans-serif; padding: 4px 8px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35); white-space: nowrap; position: relative; }
+.marca-q::after { content: ""; position: absolute; left: 50%; bottom: -5px; margin-left: -5px; border: 5px solid transparent; border-bottom: 0; border-top-color: #0b3d91; }
 
 .capas { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
 .capas button { min-height: 32px; padding: 5px 10px; font-size: 12.5px; border-radius: 20px; }
@@ -97,6 +100,16 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
 .campo { display: flex; flex-direction: column; gap: 4px; font-size: 12.5px; font-weight: 600; margin-bottom: 10px; }
 .campo small { font-weight: 400; color: var(--suave); }
 .campo input, .campo select { padding: 7px 9px; border: 1px solid var(--borde); border-radius: 8px; background: var(--fondo); font-weight: 500; }
+.retornos { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-bottom: 10px; }
+.retornos button { min-height: 34px; font-size: 13px; padding: 4px; }
+.retornos button.activa { background: var(--agua); border-color: var(--agua); color: #fff; }
+.idf { font-size: 12.5px; background: var(--fondo); border-radius: 9px; padding: 8px 11px; margin-bottom: 10px; }
+.idf:empty { display: none; }
+.idf table { width: 100%; border-collapse: collapse; margin-top: 4px; font-variant-numeric: tabular-nums; }
+.idf td { padding: 2px 0; }
+.idf td:last-child { text-align: right; font-weight: 600; }
+.idf small { color: var(--suave); }
+.explica { grid-column: 1 / -1; font-size: 12.5px; color: var(--suave); margin: 0; }
 .fila { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .pie { font-size: 11px; color: var(--suave); padding-top: 14px; }
 

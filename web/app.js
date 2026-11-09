@@ -2,6 +2,8 @@
 import { geotiffFloat32 } from "./geotiff_escribir.js";
 import { cargarCopernicus, cargarArchivo, mascara, esquinas, afin, areaAnillo } from "./dem.js";
 import { pintar, sombreado, curvas, equidistancia, leyenda, CLASES_PEND } from "./render.js";
+import { cargarCobertura } from "./cobertura.js";
+import { lluviasDiseno, ajusteIDF, numerosCurva, SUELOS } from "./lluvia.js";
 
 const params = new URLSearchParams(location.search);
 const API = (params.get("api") || window.COTA_API || location.origin).replace(/\/$/, "");
@@ -12,7 +14,7 @@ const m3 = (v) => fmt(Math.round(v)) + " m³";
 
 const E = {
   anillo: null, vertices: [], cursor: null, dibujando: false,
-  archivo: null, g: null, an: null, capa: "escurrimiento",
+  archivo: null, g: null, an: null, capa: "escurrimiento", T: 10, lluvias: null,
 };
 
 // ---------- mapa ----------
@@ -210,7 +212,11 @@ $("b-analizar").onclick = async () => {
 function limpiarResultados() {
   detenerLluvia();
   E.g = null; E.an = null;
-  for (const id of ["paso-resultados", "paso-exportar"]) $(id).hidden = true;
+  for (const id of ["paso-resultados", "paso-tormenta", "paso-exportar"]) $(id).hidden = true;
+  $("res-tormenta").hidden = true;
+  document.querySelector('[data-capa="cobertura"]').disabled = true;
+  if (E.capa === "cobertura") E.capa = "escurrimiento";
+  marcaQ.remove();
   if (mapa.getLayer("capa")) mapa.setLayoutProperty("capa", "visibility", "none");
   mapa.getSource("curvas")?.setData(vacio);
   if ($("t-3d").checked) { $("t-3d").checked = false; alternar3D(false); }
@@ -229,7 +235,12 @@ function mostrarResultados() {
     tarjeta(`${fmt(st.zmax - st.zmin, 1)} m`, "desnivel") +
     tarjeta(st.encArea ? ha(st.encArea) : "—", st.encArea ? `se encharca · ${m3(st.encVol)}` : "sin depresiones relevantes") +
     tarjeta(ha(st.accMax), "cuenca máx. que cruza el terreno");
-  for (const id of ["paso-resultados", "paso-exportar"]) $(id).hidden = false;
+  for (const id of ["paso-resultados", "paso-tormenta", "paso-exportar"]) $(id).hidden = false;
+  $("res-tormenta").hidden = true;
+  marcaQ.remove();
+  document.querySelector('[data-capa="cobertura"]').disabled = true;
+  if (E.capa === "cobertura") elegirCapa("escurrimiento");
+  cargarLluvias();
   $("aviso-dsm").hidden = !E.g.esDSM;
   // curvas de nivel
   const eq = Math.max(equidistancia(st.zmax - st.zmin), E.g.dx >= 10 ? 1 : 0.25);
@@ -258,7 +269,7 @@ function pintarCapa() {
     $("leyenda").innerHTML = "";
     return;
   }
-  const op = { umbralCauce: umbral() };
+  const op = { umbralCauce: umbral(), retorno: E.T };
   const url = pintar(capa, E.g, E.an, op).toDataURL("image/png");
   const coordinates = esquinas(E.g);
   const src = mapa.getSource("capa");
@@ -358,6 +369,10 @@ const lluvia = { raf: 0, gotas: [], celdas: null, aLL: null, cuadro: 0 };
 
 function nuevaGota(g) {
   g.i = lluvia.celdas[(Math.random() * lluvia.celdas.length) | 0];
+  if (lluvia.esc) {
+    // muestreo por rechazo: nacen más gotas donde el suelo escurre más (menos donde se infiltra)
+    for (let k = 0; k < 20 && Math.random() > lluvia.esc[g.i] / lluvia.escMax; k++) g.i = lluvia.celdas[(Math.random() * lluvia.celdas.length) | 0];
+  }
   g.t = Math.random();
   g.vida = 0;
   g.max = 160 + Math.random() * 260;
@@ -369,7 +384,15 @@ function iniciarLluvia() {
   for (let i = 0; i < mask.length; i++) if (mask[i]) idx.push(i);
   lluvia.celdas = Int32Array.from(idx);
   lluvia.aLL = afin(E.g);
-  const n = Math.min(2500, Math.max(400, Math.round(idx.length / 3)));
+  // con tormenta: más gotas cuanto más escurre, y nacen donde se genera escorrentía
+  const T = E.an.tormenta;
+  const escMedia = T ? (T.stats.genera / (idx.length * E.g.dx * E.g.dy)) * 1000 : 0; // mm
+  lluvia.esc = T ? T.escurre : null;
+  lluvia.escMax = 1;
+  if (T) for (const i of lluvia.celdas) if (T.escurre[i] > lluvia.escMax) lluvia.escMax = T.escurre[i];
+  const n = T
+    ? Math.min(6000, Math.max(150, Math.round((idx.length / 3) * Math.min(4, escMedia / 15))))
+    : Math.min(2500, Math.max(400, Math.round(idx.length / 3)));
   lluvia.gotas = Array.from({ length: n }, () => nuevaGota({}));
   lluvia.activa = true;
   const paso = () => {
@@ -380,7 +403,7 @@ function iniciarLluvia() {
     for (const g of lluvia.gotas) {
       const k = dir[g.i];
       if (k < 0 || ++g.vida > g.max) { nuevaGota(g); continue; }
-      const enPozo = prof[g.i] >= 0.05;
+      const enPozo = (E.an.tormenta ? E.an.tormenta.profT : prof)[g.i] >= 0.05;
       g.t += enPozo ? 0.025 : 0.06 + 0.3 * Math.min(1, pe[g.i] / 15);
       while (g.t >= 1) {
         g.t -= 1;
@@ -416,6 +439,98 @@ $("t-lluvia").onchange = (e) => {
   if (encender) { e.target.checked = true; iniciarLluvia(); }
 };
 
+// ---------- tormenta de diseño ----------
+const etiquetaQ = Object.assign(document.createElement("span"), { className: "marca-q" });
+const contenedorQ = document.createElement("div");
+contenedorQ.append(etiquetaQ);
+const marcaQ = new maplibregl.Marker({ element: contenedorQ, anchor: "bottom", offset: [0, -4] });
+
+async function cargarLluvias() {
+  E.lluvias = null;
+  $("idf").innerHTML = "Buscando lluvias extremas para este lugar…";
+  const [lon, lat] = centroTerreno();
+  try {
+    E.lluvias = await lluviasDiseno(lon, lat);
+  } catch (err) { console.error(err); }
+  mostrarIDF();
+}
+
+function mostrarIDF() {
+  document.querySelectorAll(".retornos button").forEach((b) => b.classList.toggle("activa", Number(b.dataset.t) === E.T));
+  $("b-tormenta").disabled = !E.lluvias;
+  if (!E.lluvias) { $("idf").innerHTML = "No hay datos de lluvias extremas para este lugar."; return; }
+  const fila = E.lluvias.P[E.T];
+  const { a } = ajusteIDF(fila);
+  const mm = (v) => `${fmt(v, v < 10 ? 1 : 0)} mm`;
+  $("idf").innerHTML = `<b>Lluvia de ${E.T} años aquí</b>
+    <table><tr><td>En 1 hora <small>(estimada)</small></td><td>${mm(a)}</td></tr>
+    <tr><td>En 6 horas</td><td>${mm(fila[1])}</td></tr><tr><td>En 24 horas</td><td>${mm(fila[3])}</td></tr>
+    <tr><td>En 3 días</td><td>${mm(fila[5])}</td></tr></table>`;
+}
+
+document.querySelectorAll(".retornos button").forEach((b) => (b.onclick = () => {
+  E.T = Number(b.dataset.t);
+  mostrarIDF();
+  if (E.an && E.an.tormenta) simularTormenta();
+}));
+$("suelo").onchange = () => { $("suelo-txt").textContent = SUELOS[$("suelo").value]; if (E.an && E.an.tormenta) simularTormenta(); };
+$("suelo-txt").textContent = SUELOS[$("suelo").value];
+
+async function simularTormenta() {
+  if (!E.an || !E.lluvias) return;
+  $("b-tormenta").disabled = true;
+  try {
+    if (!E.an.clase) {
+      try {
+        E.an.clase = await cargarCobertura(API, E.g, estado);
+      } catch (err) {
+        console.error(err);
+        E.an.clase = new Uint8Array(E.g.w * E.g.h); // sin cobertura: se asume cultivo
+        estado("No pude leer la cobertura de suelo; se asume terreno cultivado.", true);
+      }
+      document.querySelector('[data-capa="cobertura"]').disabled = false;
+    }
+    if (!$("estado").classList.contains("error")) estado("Simulando la tormenta…");
+    const fila = E.lluvias.P[E.T];
+    const cn = numerosCurva(E.an.clase, $("suelo").value);
+    const r = await pedir({ tipo: "tormenta", cn, P24: fila[3], idf: ajusteIDF(fila) }, [cn.buffer]);
+    E.an.tormenta = { ...r, T: E.T, P24: fila[3], suelo: $("suelo").value };
+    if (!$("estado").classList.contains("error")) estado("");
+    mostrarTormenta();
+    if (!["escurrimiento", "encharcamiento"].includes(E.capa)) elegirCapa("escurrimiento"); else pintarCapa();
+    if ($("t-lluvia").checked) { detenerLluvia(); $("t-lluvia").checked = true; iniciarLluvia(); }
+  } catch (err) {
+    console.error(err);
+    estado(err.message || String(err), true);
+  } finally {
+    $("b-tormenta").disabled = false;
+  }
+}
+$("b-tormenta").onclick = simularTormenta;
+
+const caudalTxt = (q) => (q >= 1 ? `${fmt(q, 1)} m³/s` : `${fmt(q * 1000)} L/s`);
+
+function mostrarTormenta() {
+  const t = E.an.tormenta, s = t.stats;
+  const pct = (v) => `${fmt((100 * v) / s.llueve)} %`;
+  $("res-tormenta").innerHTML =
+    `<p class="explica">Con una lluvia de <b>${t.T} años</b> (${fmt(t.P24)} mm en 24 h) sobre tu terreno:</p>` +
+    tarjeta(m3(s.llueve), "de agua cae en total") +
+    tarjeta(m3(s.genera), `escurre por la superficie (${pct(s.genera)})`, "agua") +
+    tarjeta(m3(s.infiltra), `se infiltra en el suelo (${pct(s.infiltra)})`) +
+    tarjeta(s.aCharcos ? m3(s.enCharcos) : "—", s.aCharcos ? `queda en pozas (${ha(s.aCharcos)})` : "no se forman pozas") +
+    tarjeta(m3(s.sale), "sale del terreno") +
+    tarjeta(m3(s.entra), "entra desde terrenos vecinos") +
+    tarjeta(caudalTxt(s.qMax), "caudal máximo en el cauce principal (en el peak de la tormenta)", "ancha agua") +
+    `<p class="explica">Cobertura del suelo de ESA WorldCover y suelo tipo ${t.suelo} (número de curva medio ${fmt(s.cnMedio)}). Lluvias de GPEX, base satelital de ~10 km${E.lluvias.distanciaKm > 3 ? ` (celda a ${fmt(E.lluvias.distanciaKm)} km)` : ""}: es una estimación, no reemplaza un estudio hidrológico.</p>`;
+  $("res-tormenta").hidden = false;
+  if (s.iMax >= 0) {
+    const r = (s.iMax / E.g.w) | 0, c = s.iMax - r * E.g.w;
+    etiquetaQ.textContent = `Caudal máx. ${caudalTxt(s.qMax)}`;
+    marcaQ.setLngLat(afin(E.g)(c + 0.5, r + 0.5)).addTo(mapa);
+  }
+}
+
 // ---------- exportar ----------
 function descargar(nombre, datos, tipo) {
   const url = URL.createObjectURL(datos instanceof Blob ? datos : new Blob([datos], { type: tipo }));
@@ -433,14 +548,21 @@ function contorno() {
 $("b-geojson").onclick = () => {
   const st = E.an.stats;
   const props = { fuente: E.g.fuente, area_ha: +(st.area / 1e4).toFixed(3), cota_min: +st.zmin.toFixed(2), cota_max: +st.zmax.toFixed(2),
-    pendiente_media_pct: +st.pendMedia.toFixed(2), encharcamiento_ha: +(st.encArea / 1e4).toFixed(3), encharcamiento_m3: Math.round(st.encVol) };
+    pendiente_media_pct: +st.pendMedia.toFixed(2), encharcamiento_max_ha: +(st.encArea / 1e4).toFixed(3), encharcamiento_max_m3: Math.round(st.encVol) };
+  const t = E.an.tormenta;
+  if (t) Object.assign(props, { tormenta_retorno_anios: t.T, lluvia_24h_mm: +t.P24.toFixed(1), suelo: t.suelo,
+    escorrentia_m3: Math.round(t.stats.genera), infiltracion_m3: Math.round(t.stats.infiltra), pozas_m3: Math.round(t.stats.enCharcos),
+    sale_m3: Math.round(t.stats.sale), caudal_max_m3s: +t.stats.qMax.toFixed(3) });
   const fc = { type: "FeatureCollection", features: [{ type: "Feature", properties: props, geometry: { type: "Polygon", coordinates: [contorno()] } }] };
   descargar("cota_terreno.geojson", JSON.stringify(fc, null, 1), "application/geo+json");
 };
 
 $("b-tif").onclick = async () => {
-  const fuentes = { elevacion: [E.g.z, "elevacion_m"], pendiente: [E.an.pendiente, "pendiente_pct"], encharcamiento: [E.an.prof, "encharcamiento_m"],
-    escurrimiento: [E.an.acc, "area_aportante_m2"], ninguna: [E.g.z, "elevacion_m"] };
+  const t = E.an.tormenta;
+  const fuentes = { elevacion: [E.g.z, "elevacion_m"], pendiente: [E.an.pendiente, "pendiente_pct"],
+    encharcamiento: t ? [t.profT, `pozas_T${t.T}_m`] : [E.an.prof, "encharcamiento_max_m"],
+    escurrimiento: t ? [t.qp, `caudal_T${t.T}_m3s`] : [E.an.acc, "area_aportante_m2"],
+    cobertura: [E.an.clase ? Float32Array.from(E.an.clase) : E.g.z, "cobertura_worldcover"], ninguna: [E.g.z, "elevacion_m"] };
   const [arr, nombre] = fuentes[E.capa];
   const { w, h } = E.g;
   const { crs, x0, y0, rx, ry } = E.g.georef;
@@ -455,6 +577,13 @@ $("b-tif").onclick = async () => {
     estado("No pude generar el GeoTIFF: " + err.message, true);
   }
 };
+
+function informeTormenta(fila) {
+  const t = E.an.tormenta;
+  if (!t) return "";
+  const s = t.stats;
+  return `<h2>Tormenta de ${t.T} años</h2><table>${fila("Lluvia en 24 h", `${fmt(t.P24, 1)} mm`)}${fila("Agua que cae sobre el terreno", m3(s.llueve))}${fila("Escurre por la superficie", m3(s.genera))}${fila("Se infiltra", m3(s.infiltra))}${fila("Queda en pozas", s.aCharcos ? `${m3(s.enCharcos)} en ${ha(s.aCharcos)}` : "no se forman")}${fila("Sale del terreno", m3(s.sale))}${fila("Entra desde terrenos vecinos", m3(s.entra))}${fila("Caudal máximo en el cauce principal", caudalTxt(s.qMax))}${fila("Suelo / número de curva medio", `tipo ${t.suelo} / ${fmt(s.cnMedio)}`)}</table><p class="nota">Lluvias: GPEX (Gründemann et al. 2021, CC BY 4.0), base satelital MSWEP de 0,1°. Escorrentía: número de curva SCS con cobertura ESA WorldCover 2021 (CC BY 4.0). Caudal: método racional con tiempo de concentración de California; las duraciones menores a 3 h se extrapolan.</p>`;
+}
 
 $("b-informe").onclick = () => {
   const st = E.an.stats, g = E.g;
@@ -471,6 +600,7 @@ $("b-informe").onclick = () => {
     <table>${CLASES_PEND.map((k, i) => fila(k.txt, `${fmt(100 * st.clases[i], 1)} % · ${ha(st.clases[i] * st.area)}`)).join("")}</table>
     <h2>Agua</h2>
     <table>${fila("Zonas que se encharcan (≥ 5 cm)", st.encArea ? ha(st.encArea) : "no se detectan")}${fila("Volumen que pueden retener", m3(st.encVol))}${fila("Profundidad máxima", `${fmt(st.encMax, 2)} m`)}${fila("Mayor cuenca que cruza el terreno", ha(st.accMax))}</table>
+    ${informeTormenta(fila)}
     <p class="nota">${g.esDSM ? "Copernicus GLO-30 es un modelo digital de superficie de ~30 m: incluye vegetación y construcciones y no capta detalles menores a la celda. " : ""}Resultado referencial de prediagnóstico; no reemplaza un levantamiento topográfico ni un estudio hidrológico.</p>`;
   window.print();
 };

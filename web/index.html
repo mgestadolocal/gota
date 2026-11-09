@@ -53,6 +53,7 @@
           <button data-capa="encharcamiento">Encharcamiento</button>
           <button data-capa="pendiente">Pendiente</button>
           <button data-capa="elevacion">Elevación</button>
+          <button data-capa="cobertura" disabled>Cobertura</button>
           <button data-capa="ninguna">Satélite</button>
         </div>
         <div id="control-umbral" class="control">
@@ -68,8 +69,29 @@
         <p id="aviso-dsm" class="aviso" hidden>Copernicus es un modelo de <b>superficie</b>: incluye árboles y edificios, y su celda es de ~30 m. Sirve para un prediagnóstico; para nivelar o diseñar el drenaje, sube un DEM de dron o LiDAR.</p>
       </section>
 
+      <section class="paso" id="paso-tormenta" hidden>
+        <h2><span>3</span>Simula una tormenta</h2>
+        <p class="ayuda">Elige qué tan fuerte es la lluvia. Una lluvia "de 10 años" es la que, en promedio, se da una vez cada 10 años en este lugar.</p>
+        <div class="retornos" role="radiogroup" aria-label="Período de retorno">
+          <button data-t="2">2 años</button><button data-t="5">5 años</button><button data-t="10" class="activa">10 años</button>
+          <button data-t="20">20 años</button><button data-t="50">50 años</button><button data-t="100">100 años</button>
+        </div>
+        <div id="idf" class="idf"></div>
+        <label class="campo">Tipo de suelo
+          <select id="suelo">
+            <option value="A">A · Arenoso o muy permeable</option>
+            <option value="B">B · Franco, permeabilidad media</option>
+            <option value="C" selected>C · Franco-arcilloso o con capa dura</option>
+            <option value="D">D · Arcilloso, delgado sobre roca o compactado</option>
+          </select>
+          <small id="suelo-txt"></small>
+        </label>
+        <button id="b-tormenta" class="primario ancho">Simular tormenta</button>
+        <div id="res-tormenta" class="tarjetas" hidden></div>
+      </section>
+
       <section class="paso" id="paso-exportar" hidden>
-        <h2><span>3</span>Llevártelo</h2>
+        <h2><span>4</span>Llevártelo</h2>
         <div class="botones">
           <button id="b-informe" class="secundario">Informe PDF</button>
           <button id="b-tif" class="secundario">GeoTIFF de la capa</button>
@@ -79,7 +101,9 @@
 
       <footer class="pie">
         Elevación: <a href="https://spacedata.copernicus.eu/collections/copernicus-digital-elevation-model" target="_blank" rel="noopener">Copernicus DEM</a> © DLR/Airbus, ESA ·
-        Relieve 3D: <a href="https://registry.opendata.aws/terrain-tiles/" target="_blank" rel="noopener">Terrain Tiles</a> · Prediagnóstico referencial; no reemplaza un levantamiento topográfico.
+        Relieve 3D: <a href="https://registry.opendata.aws/terrain-tiles/" target="_blank" rel="noopener">Terrain Tiles</a> ·
+        Lluvias extremas: <a href="https://doi.org/10.4121/12764429.v4" target="_blank" rel="noopener">GPEX</a> (Gründemann et al., CC BY 4.0) ·
+        Cobertura: <a href="https://esa-worldcover.org" target="_blank" rel="noopener">ESA WorldCover 2021</a> (CC BY 4.0) · Prediagnóstico referencial; no reemplaza un levantamiento topográfico.
       </footer>
     </div>
   </aside>
