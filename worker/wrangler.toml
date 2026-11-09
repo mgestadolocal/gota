@@ -1,6 +1,7 @@
 name = "gota-dem"
 main = "src/index.js"
 compatibility_date = "2026-10-01"
+workers_dev = true
 
 [vars]
 # Orígenes que pueden usar el intermediario (separados por coma). El workflow lo reemplaza con la URL de Pages.
