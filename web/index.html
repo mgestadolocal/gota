@@ -70,27 +70,33 @@
       </section>
 
       <section class="paso" id="paso-cortes" hidden>
-        <h2><span>3</span>Movimiento de tierra</h2>
-        <label class="campo">Superficie de diseño
-          <select id="modo">
-            <option value="nivelado">Plano horizontal (nivelado)</option>
-            <option value="ajuste">Plano de mejor ajuste (mínimo movimiento)</option>
-            <option value="pendiente">Plano con pendiente dada</option>
-          </select>
-        </label>
+        <h2><span>3</span>Si quieres emparejar el terreno</h2>
+        <p class="ayuda">¿Cuánta tierra hay que sacar de las partes altas (<b style="color:var(--corte)">corte</b>) y cuánta poner en las bajas (<b style="color:var(--agua)">relleno</b>) para dejar el polígono parejo? Elige cómo quieres que quede:</p>
+        <div class="opciones" role="radiogroup">
+          <label class="opcion"><input type="radio" name="modo" value="nivelado" checked />
+            <span><b>Totalmente plano</b><small>Una cancha, galpón o plataforma para construir.</small></span></label>
+          <label class="opcion"><input type="radio" name="modo" value="pendiente" />
+            <span><b>Con una pendiente suave</b><small>Para riego por surcos o tendido, o para que el agua lluvia escurra hacia un lado.</small></span></label>
+          <label class="opcion"><input type="radio" name="modo" value="ajuste" />
+            <span><b>Parejo, moviendo lo mínimo</b><small>Mantiene la inclinación natural del terreno y solo elimina lomos y hoyos.</small></span></label>
+        </div>
         <div id="campos-pendiente" class="fila" hidden>
-          <label class="campo">Pendiente (%)<input id="pend" type="number" step="0.05" min="0" max="30" value="0.2" /></label>
-          <label class="campo">Hacia
+          <label class="campo">Pendiente (%)<small>0,1–0,5 % típico en riego</small><input id="pend" type="number" step="0.05" min="0" max="30" value="0.2" /></label>
+          <label class="campo">El agua corre hacia el<small>&nbsp;</small>
             <select id="azimut">
               <option value="0">Norte</option><option value="45">Noreste</option><option value="90">Este</option><option value="135">Sureste</option>
               <option value="180">Sur</option><option value="225">Suroeste</option><option value="270" selected>Oeste</option><option value="315">Noroeste</option>
             </select>
           </label>
         </div>
-        <label id="campo-cota" class="campo">Cota en el centro (m) <small>vacío = equilibrar corte y relleno</small>
-          <input id="cota" type="number" step="0.1" placeholder="automática" />
-        </label>
-        <button id="b-cortes" class="primario ancho">Calcular volúmenes</button>
+        <details id="campo-cota" class="avanzado">
+          <summary>Opción avanzada: fijar la altura final</summary>
+          <label class="campo">Altura del terreno terminado en el centro (m s.n.m.)
+            <small>Si la dejas vacía, se calcula la altura en que la tierra que sacas alcanza justo para rellenar (no sobra ni falta). Si la fijas, verás cuánta tierra sobra o falta.</small>
+            <input id="cota" type="number" step="0.1" placeholder="automática" />
+          </label>
+        </details>
+        <button id="b-cortes" class="primario ancho">Calcular cuánta tierra mover</button>
         <div id="res-cortes" class="tarjetas" hidden></div>
       </section>
 

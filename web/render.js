@@ -167,6 +167,6 @@ export function leyenda(capa, a, opciones = {}) {
     return `<b>Pendiente</b>` + CLASES_PEND.map((c, i) => `<div class="ley-fila"><i style="background:${c.color}"></i>${c.txt}<span>${fmt(100 * st.clases[i])} %</span></div>`).join("");
   if (capa === "encharcamiento") return `<b>Encharcamiento (profundidad)</b>${barra(["#bfe6ff", "#4aa8ff", "#0b3d91"], "5 cm", "≥ 1,5 m")}<p class="ley-nota">Depresiones sin salida: donde el agua se junta si llueve fuerte.</p>`;
   if (capa === "escurrimiento") return `<b>Escurrimiento (área aportante)</b>${barra(["#8fd0ff", "#4aa8ff", "#0b3d91"], fmt((opciones.umbralCauce || 5000) / 10000, 1) + " ha", fmt(st.accMax / 10000, 0) + " ha")}<p class="ley-nota">Por dónde corre el agua. Más oscuro = más superficie drena por ahí.</p>`;
-  if (capa === "cortes") return `<b>Corte / relleno</b>${barra(["#2b7bba", "#f4f1ea", "#d7301f"], "relleno " + fmt(opciones.difMax || 1, 1) + " m", "corte " + fmt(opciones.difMax || 1, 1) + " m")}`;
+  if (capa === "cortes") return `<b>Cuánto rebajar o rellenar</b>${barra(["#2b7bba", "#f4f1ea", "#d7301f"], "rellenar " + fmt(opciones.difMax || 1, 1) + " m", "rebajar " + fmt(opciones.difMax || 1, 1) + " m")}`;
   return "";
 }

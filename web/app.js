@@ -351,33 +351,43 @@ function detenerLluvia() {
   $("t-lluvia").checked = false;
 }
 $("t-lluvia").onchange = (e) => {
+  const encender = e.target.checked && !!E.an; // leer ANTES de detener (detenerLluvia desmarca la casilla)
   detenerLluvia();
-  if (e.target.checked && E.an) { e.target.checked = true; iniciarLluvia(); }
+  if (encender) { e.target.checked = true; iniciarLluvia(); }
 };
 
 // ---------- corte y relleno ----------
-$("modo").onchange = () => {
-  const m = $("modo").value;
-  $("campos-pendiente").hidden = m !== "pendiente";
-  $("campo-cota").hidden = m === "ajuste";
-};
+const modo = () => document.querySelector('input[name="modo"]:checked').value;
+document.querySelectorAll('input[name="modo"]').forEach((el) => (el.onchange = () => {
+  $("campos-pendiente").hidden = modo() !== "pendiente";
+  $("campo-cota").hidden = modo() === "ajuste";
+}));
 $("b-cortes").onclick = async () => {
   if (!E.an) return;
   $("b-cortes").disabled = true;
   try {
-    const r = await pedir({ tipo: "cortes", modo: $("modo").value, pendiente: $("pend").value, azimut: $("azimut").value, cota: $("cota").value });
+    const r = await pedir({ tipo: "cortes", modo: modo(), pendiente: $("pend").value, azimut: $("azimut").value, cota: modo() === "ajuste" ? "" : $("cota").value });
     E.an.dif = r.dif;
     E.an.cortes = r.stats;
     const s = r.stats;
     E.difMax = Math.max(0.1, s.maxCorte, s.maxRelleno);
     const dirs = ["norte", "noreste", "este", "sureste", "sur", "suroeste", "oeste", "noroeste"];
-    const plano = s.azimut === null ? `horizontal a ${fmt(s.cotaCentro, 2)} m` : `${fmt(s.pendiente, 2)} % hacia el ${dirs[Math.round(s.azimut / 45) % 8]} · ${fmt(s.cotaCentro, 2)} m en el centro`;
+    const plano = s.azimut === null
+      ? `totalmente plano a ${fmt(s.cotaCentro, 1)} m s.n.m.`
+      : `con ${fmt(s.pendiente, 2)} % de pendiente bajando hacia el ${dirs[Math.round(s.azimut / 45) % 8]} (${fmt(s.cotaCentro, 1)} m s.n.m. en el centro)`;
+    const camiones = (v) => fmt(Math.ceil(v / 7));
+    const balance = Math.abs(s.neto) < Math.max(1, 0.01 * s.corte)
+      ? "La tierra que se saca alcanza justo para rellenar: no hay que traer ni botar tierra."
+      : s.neto > 0
+        ? `Sobran ${m3(s.neto)} que habría que sacar del predio (≈ ${camiones(s.neto)} camiones de 7 m³).`
+        : `Faltan ${m3(-s.neto)} que habría que traer de afuera (≈ ${camiones(-s.neto)} camiones de 7 m³).`;
     $("res-cortes").innerHTML =
-      tarjeta(m3(s.corte), `corte · ${ha(s.aCorte)}`, "corte") +
-      tarjeta(m3(s.relleno), `relleno · ${ha(s.aRelleno)}`, "relleno") +
-      tarjeta(`${fmt(s.maxCorte, 2)} m`, "corte máximo", "corte") +
-      tarjeta(`${fmt(s.maxRelleno, 2)} m`, "relleno máximo", "relleno") +
-      tarjeta(Math.abs(s.neto) < 1 ? "Equilibrado" : (s.neto > 0 ? "Sobran " : "Faltan ") + m3(Math.abs(s.neto)), `plano ${plano}`, "ancha");
+      `<p class="explica">Para dejar el terreno ${plano}:</p>` +
+      tarjeta(m3(s.corte), `sacar (corte) en ${ha(s.aCorte)}`, "corte") +
+      tarjeta(m3(s.relleno), `poner (relleno) en ${ha(s.aRelleno)}`, "relleno") +
+      tarjeta(`${fmt(s.maxCorte, 2)} m`, "lo más profundo que se rebaja", "corte") +
+      tarjeta(`${fmt(s.maxRelleno, 2)} m`, "lo más alto que se rellena", "relleno") +
+      `<p class="explica">${balance} En el mapa, <b style="color:var(--corte)">rojo</b> = rebajar y <b style="color:var(--agua)">azul</b> = rellenar. Volúmenes geométricos, sin esponjamiento.</p>`;
     $("res-cortes").hidden = false;
     document.querySelector('[data-capa="cortes"]').disabled = false;
     elegirCapa("cortes");

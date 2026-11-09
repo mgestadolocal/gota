@@ -97,6 +97,15 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
 .campo { display: flex; flex-direction: column; gap: 4px; font-size: 12.5px; font-weight: 600; margin-bottom: 10px; }
 .campo small { font-weight: 400; color: var(--suave); }
 .campo input, .campo select { padding: 7px 9px; border: 1px solid var(--borde); border-radius: 8px; background: var(--fondo); font-weight: 500; }
+.opciones { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
+.opcion { display: flex; gap: 9px; align-items: flex-start; padding: 9px 11px; border: 1px solid var(--borde); border-radius: 10px; cursor: pointer; }
+.opcion:has(input:checked) { border-color: var(--acento); background: var(--fondo); }
+.opcion input { margin-top: 3px; accent-color: var(--acento); }
+.opcion b { display: block; font-size: 13.5px; }
+.opcion small { color: var(--suave); font-size: 12px; }
+.avanzado { font-size: 12.5px; margin-bottom: 6px; }
+.avanzado summary { cursor: pointer; color: var(--suave); margin-bottom: 8px; }
+.explica { grid-column: 1 / -1; font-size: 12.5px; color: var(--suave); margin: 0; }
 .fila { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .pie { font-size: 11px; color: var(--suave); padding-top: 14px; }
 
