@@ -36,7 +36,7 @@ export default {
       return new Response(null, { status: 204, headers: { ...cors, "Access-Control-Max-Age": "86400" } });
     }
     if (url.pathname === "/") {
-      return new Response(JSON.stringify({ servicio: "cota", rutas: ["/cop/{tesela}", "/wc/{tesela}"] }), {
+      return new Response(JSON.stringify({ servicio: "gota.ai", rutas: ["/cop/{tesela}", "/wc/{tesela}"] }), {
         headers: { ...cors, "Content-Type": "application/json" },
       });
     }

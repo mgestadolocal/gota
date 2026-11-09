@@ -6,7 +6,7 @@ import { cargarCobertura } from "./cobertura.js";
 import { lluviasDiseno, ajusteIDF, numerosCurva, SUELOS } from "./lluvia.js";
 
 const params = new URLSearchParams(location.search);
-const API = (params.get("api") || window.COTA_API || location.origin).replace(/\/$/, "");
+const API = (params.get("api") || window.GOTA_API || location.origin).replace(/\/$/, "");
 const $ = (id) => document.getElementById(id);
 const fmt = (v, d = 0) => Number(v).toLocaleString("es-CL", { maximumFractionDigits: d, minimumFractionDigits: d });
 const ha = (m2) => (m2 >= 100000 ? fmt(m2 / 10000, 0) : fmt(m2 / 10000, m2 >= 10000 ? 1 : 2)) + " ha";
@@ -554,7 +554,7 @@ $("b-geojson").onclick = () => {
     escorrentia_m3: Math.round(t.stats.genera), infiltracion_m3: Math.round(t.stats.infiltra), pozas_m3: Math.round(t.stats.enCharcos),
     sale_m3: Math.round(t.stats.sale), caudal_max_m3s: +t.stats.qMax.toFixed(3) });
   const fc = { type: "FeatureCollection", features: [{ type: "Feature", properties: props, geometry: { type: "Polygon", coordinates: [contorno()] } }] };
-  descargar("cota_terreno.geojson", JSON.stringify(fc, null, 1), "application/geo+json");
+  descargar("gota_terreno.geojson", JSON.stringify(fc, null, 1), "application/geo+json");
 };
 
 $("b-tif").onclick = async () => {
@@ -571,7 +571,7 @@ $("b-tif").onclick = async () => {
   const epsg = Number(crs.split(":")[1]);
   try {
     const buf = geotiffFloat32(vals, w, h, { epsg, x0, y0, rx, ry });
-    descargar(`cota_${nombre}.tif`, new Blob([buf], { type: "image/tiff" }));
+    descargar(`gota_${nombre}.tif`, new Blob([buf], { type: "image/tiff" }));
   } catch (err) {
     console.error(err);
     estado("No pude generar el GeoTIFF: " + err.message, true);
@@ -592,7 +592,7 @@ $("b-informe").onclick = () => {
   const fila = (a, b) => `<tr><td>${a}</td><td>${b}</td></tr>`;
   $("informe").innerHTML = `
     <h1>Informe de terreno</h1>
-    <p class="meta">Generado con Cota el ${new Date().toLocaleDateString("es-CL", { dateStyle: "long" })} · centro aprox. ${fmt(lat, 5)}, ${fmt(lon, 5)} · fuente: ${g.fuente} · celda ${fmt(g.dx, 1)} × ${fmt(g.dy, 1)} m</p>
+    <p class="meta">Generado con Gota.ai el ${new Date().toLocaleDateString("es-CL", { dateStyle: "long" })} · centro aprox. ${fmt(lat, 5)}, ${fmt(lon, 5)} · fuente: ${g.fuente} · celda ${fmt(g.dx, 1)} × ${fmt(g.dy, 1)} m</p>
     <img src="${img}" alt="Mapa del terreno" />
     <h2>Terreno</h2>
     <table>${fila("Superficie", ha(st.area))}${fila("Cota mínima / máxima", `${fmt(st.zmin, 1)} / ${fmt(st.zmax, 1)} m s.n.m.`)}${fila("Desnivel", `${fmt(st.zmax - st.zmin, 1)} m`)}${fila("Pendiente media", `${fmt(st.pendMedia, 1)} %`)}</table>

@@ -1,4 +1,4 @@
-# Cota — análisis de terreno para Chile
+# Gota.ai — el agua y el terreno de Chile
 
 Dibuja un polígono (o sube un DEM de dron/LiDAR) y obtén, en el navegador:
 
@@ -26,7 +26,7 @@ Dibuja un polígono (o sube un DEM de dron/LiDAR) y obtén, en el navegador:
 - `tools/servidor_local.py` — prueba local: `python tools/servidor_local.py` → http://localhost:8790/
 
 ## Despliegue
-GitHub Pages (`pages.yml`, escribe `web/config.js` con la variable `COTA_API`) y Cloudflare Worker (`worker.yml`,
+GitHub Pages (`pages.yml`, escribe `web/config.js` con la variable `GOTA_API`) y Cloudflare Worker (`worker.yml`,
 secretos `CLOUDFLARE_API_TOKEN` y `CLOUDFLARE_ACCOUNT_ID`, variable `ALLOWED_ORIGINS`).
 
 ## Límites

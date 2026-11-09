@@ -3,8 +3,9 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Cota — análisis de terreno</title>
-  <meta name="description" content="Dibuja tu terreno y ve por dónde escurre el agua, dónde se acumula, sus pendientes y cuánto movimiento de tierra necesitas. Gratis, para todo Chile." />
+  <title>Gota.ai — agua y terreno</title>
+  <meta name="description" content="Gota.ai: dibuja tu terreno y ve por dónde escurre el agua, dónde se acumula, sus pendientes y cuánto movimiento de tierra necesitas. Gratis, para todo Chile." />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M16 2.5S6 13.6 6 20a10 10 0 0 0 20 0C26 13.6 16 2.5 16 2.5Z' fill='%232b7bba'/%3E%3Cpath d='M9.2 19.5c2.2-.9 3.8.8 6.3.1s3.8-1.6 6.5-.4' stroke='white' stroke-width='1.8' fill='none' stroke-linecap='round'/%3E%3C/svg%3E" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" />
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/maplibre-gl@4.7.1/dist/maplibre-gl.css" />
@@ -19,8 +20,8 @@
 
   <aside id="panel">
     <header class="marca">
-      <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M3 24c5-1 7-6 11-6s5 4 9 3 5-5 6-7" /><path d="M3 18c4-1 6-7 10-7s5 3 8 2 4-4 5-6" opacity=".55" /><path d="M3 12c3-1 5-6 8-6s4 2 6 1" opacity=".3" /></svg>
-      <div><h1>Cota</h1><p>Entiende tu terreno antes de moverlo</p></div>
+      <svg viewBox="0 0 32 32" aria-hidden="true"><path class="gota" d="M16 2.5C16 2.5 6 13.6 6 20a10 10 0 0 0 20 0C26 13.6 16 2.5 16 2.5Z" /><path class="curva" d="M9.2 19.5c2.2-.9 3.8.8 6.3.1s3.8-1.6 6.5-.4" /><path class="curva" d="M10.4 24c2-.7 3.6.5 5.6 0s3.4-1.2 5.6-.3" opacity=".7" /></svg>
+      <div><h1>Gota<span>.ai</span></h1><p>Por dónde corre el agua en tu terreno</p></div>
       <button id="plegar" class="icono" title="Plegar panel" aria-label="Plegar panel">▾</button>
     </header>
 

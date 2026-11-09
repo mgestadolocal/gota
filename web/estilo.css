@@ -35,7 +35,10 @@ a { color: var(--acento); }
   background: var(--panel); border-radius: 14px; box-shadow: var(--sombra); overflow: hidden; z-index: 5;
 }
 .marca { display: flex; align-items: center; gap: 10px; padding: 14px 16px 12px; border-bottom: 1px solid var(--borde); }
-.marca svg { width: 34px; height: 34px; flex: none; fill: none; stroke: var(--acento); stroke-width: 2.2; stroke-linecap: round; }
+.marca svg { width: 34px; height: 34px; flex: none; stroke-linecap: round; }
+.marca svg .gota { fill: var(--agua); }
+.marca svg .curva { fill: none; stroke: #fff; stroke-width: 1.8; }
+.marca h1 span { color: var(--agua); }
 .marca h1 { margin: 0; font-size: 20px; font-weight: 800; letter-spacing: -0.02em; }
 .marca p { margin: 0; color: var(--suave); font-size: 12.5px; }
 .marca .icono { margin-left: auto; display: none; }
