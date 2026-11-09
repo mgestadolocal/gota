@@ -32,3 +32,14 @@ secretos `CLOUDFLARE_API_TOKEN` y `CLOUDFLARE_ACCOUNT_ID`, variable `ALLOWED_ORI
 ## Límites
 Copernicus es un modelo de superficie (incluye árboles y edificios) de ~30 m: sirve para prediagnóstico,
 no para nivelar potreros. No reemplaza topografía ni estudio hidrológico.
+
+## Gotyx: sitio, demo y cuentas
+- `web/index.html` — landing (assets en `web/assets/`, clips en `web/assets/clips/`).
+- `web/app/` — el software. `?demo=macul` o `?demo=aculeo` abre la demo sin cuenta; sin `?demo` exige sesión.
+- `web/ingresar.html` — acceso de clientes. `web/admin.html` — panel privado (solicitudes de demo y cuentas).
+- Worker (`worker/src/index.js`): `/cop` y `/wc` (sin sesión solo las teselas de la demo), `POST /demo`,
+  `/auth/login|logout|yo`, `/admin/*` (cabecera `X-Admin-Key`). Datos en KV `gotyx-datos` (binding `DATOS`, el
+  workflow lo crea y lo enlaza). Secretos del repo: `ADMIN_KEY`, y opcionales `RESEND_API_KEY` + `AVISO_CORREO`
+  para recibir un correo por cada solicitud. Las claves de clientes se guardan con PBKDF2-SHA256 y sal.
+- Nota: KV es eventualmente consistente (≈60 s): un cierre de sesión, una clave nueva o un borrado pueden tardar
+  hasta un minuto en verse en todas partes.
