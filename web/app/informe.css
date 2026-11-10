@@ -1,0 +1,102 @@
+/* Informe imprimible de Gotyx (A4 vertical, hojas de tamaño fijo) */
+#informe { display: none; }
+@media print {
+  @page { size: A4; margin: 0; }
+  html, body { height: auto; overflow: visible !important; background: #fff !important; }
+  body > *:not(#informe) { display: none !important; }
+  #informe { display: block !important; color: #0d1b26; font: 9.6pt/1.5 Manrope, system-ui, sans-serif; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}
+#informe .hoja { width: 210mm; height: 297mm; padding: 14mm 15mm 18mm; position: relative; overflow: hidden; break-after: page; page-break-after: always; background: #fff; }
+#informe .hoja:last-child { break-after: auto; page-break-after: auto; }
+#informe b { font-weight: 700; }
+
+/* portada */
+#informe .portada { padding-top: 0; }
+#informe .cab { margin: 0 -15mm; padding: 9mm 15mm 8mm; display: flex; align-items: center; justify-content: space-between;
+  background: radial-gradient(120% 140% at 0% 0%, #12344d 0%, #071521 55%, #050e16 100%); color: #eaf6ff; position: relative; }
+#informe .cab::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 1.2mm; background: linear-gradient(90deg, #2b8fd6, #5cc8ff, #2b8fd6); }
+#informe .cab-marca { display: flex; align-items: center; gap: 3mm; font-size: 20pt; font-weight: 800; letter-spacing: -0.03em; }
+#informe .cab-marca svg { width: 10mm; height: 10mm; }
+#informe .cab-marca i, #informe .marca-pie i { font-style: normal; color: #5cc8ff; }
+#informe .cab-meta { text-align: right; }
+#informe .cab-meta b { display: block; font: 700 8pt "JetBrains Mono", monospace; letter-spacing: 0.16em; text-transform: uppercase; color: #5cc8ff; }
+#informe .cab-meta span { font: 500 8pt "JetBrains Mono", monospace; color: #9cb8c9; }
+#informe .titulo { margin: 9mm 0 5mm; }
+#informe .sobre { font: 700 7.6pt "JetBrains Mono", monospace; letter-spacing: 0.16em; text-transform: uppercase; color: #2b8fd6; }
+#informe h1 { font-size: 26pt; line-height: 1.08; letter-spacing: -0.03em; margin: 2mm 0 2mm; font-weight: 800; }
+#informe .coords { margin: 0; color: #5b7383; font: 500 8pt "JetBrains Mono", monospace; }
+#informe .hero { position: relative; border-radius: 4mm; overflow: hidden; height: 112mm; background: #0a1c29; }
+#informe .hero img { width: 100%; height: 100%; object-fit: cover; display: block; }
+#informe .hero .chip { position: absolute; left: 4mm; top: 4mm; background: rgba(5, 14, 22, 0.82); color: #eaf6ff; border: 0.3mm solid rgba(92, 200, 255, 0.6);
+  font: 700 7.5pt "JetBrains Mono", monospace; letter-spacing: 0.08em; text-transform: uppercase; padding: 1.4mm 3mm; border-radius: 10mm; }
+#informe .kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 3mm; margin: 5mm 0; }
+#informe .kpi { border: 0.3mm solid #dbe6ee; border-radius: 3mm; padding: 3.5mm 4mm; background: #f5f9fc; position: relative; }
+#informe .kpi::before { content: ""; position: absolute; left: 4mm; top: 0; width: 8mm; height: 0.8mm; background: #2b8fd6; border-radius: 0 0 1mm 1mm; }
+#informe .kpi b { display: block; font-size: 15pt; letter-spacing: -0.02em; font-weight: 800; }
+#informe .kpi span { font: 600 7pt "JetBrains Mono", monospace; letter-spacing: 0.12em; text-transform: uppercase; color: #5b7383; }
+#informe .kpi.agua { background: linear-gradient(135deg, #0b2d45, #0a1c29); border-color: #0b2d45; color: #eaf6ff; }
+#informe .kpi.agua b { color: #5cc8ff; }
+#informe .kpi.agua span { color: #9cb8c9; }
+#informe .resumen { display: grid; grid-template-columns: 44mm 1fr; gap: 6mm; align-items: start; }
+#informe .resumen h2 { margin: 0 0 1.5mm; font-size: 12pt; }
+#informe .resumen p { margin: 0; font-size: 10pt; line-height: 1.6; color: #22323d; }
+#informe .atencion { border-radius: 3mm; padding: 4mm; color: #fff; }
+#informe .atencion span { display: block; font: 700 7pt "JetBrains Mono", monospace; letter-spacing: 0.14em; text-transform: uppercase; opacity: 0.85; }
+#informe .atencion b { display: block; font-size: 20pt; font-weight: 800; letter-spacing: -0.02em; margin: 1mm 0 2mm; }
+#informe .atencion i { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.2mm; }
+#informe .atencion u { height: 1.6mm; border-radius: 1mm; background: rgba(255, 255, 255, 0.3); }
+#informe .atencion.n0 { background: linear-gradient(135deg, #16a06d, #0e7a52); }
+#informe .atencion.n0 u:nth-child(1) { background: #fff; }
+#informe .atencion.n1 { background: linear-gradient(135deg, #e7a42e, #c27b0e); }
+#informe .atencion.n1 u:nth-child(-n+2) { background: #fff; }
+#informe .atencion.n2 { background: linear-gradient(135deg, #e5603e, #b8381c); }
+#informe .atencion.n2 u { background: #fff; }
+
+/* secciones */
+#informe .sec { display: flex; align-items: center; gap: 3mm; font-size: 14pt; letter-spacing: -0.02em; margin: 0 0 4mm; padding-bottom: 2mm; border-bottom: 0.3mm solid #dbe6ee; }
+#informe .sec ~ .sec { margin-top: 7mm; }
+#informe .sec span { font: 700 8pt "JetBrains Mono", monospace; color: #2b8fd6; border: 0.3mm solid #9fd3f3; background: #eef8ff; border-radius: 1.5mm; padding: 0.6mm 1.6mm; }
+#informe .dos { display: grid; grid-template-columns: 1fr 1fr; gap: 7mm; align-items: start; }
+#informe table { width: 100%; border-collapse: collapse; }
+#informe .datos td { padding: 1.9mm 0; border-bottom: 0.25mm solid #e8eef3; }
+#informe .datos td:first-child { color: #5b7383; }
+#informe .datos td:last-child { text-align: right; font: 600 9pt "JetBrains Mono", monospace; }
+#informe .datos tr.fuerte td { border-bottom: 0; padding-top: 3mm; font-weight: 800; color: #0d1b26; }
+#informe .datos tr.fuerte td:last-child { color: #1d7fc4; font-size: 11pt; }
+#informe .mini-tit { font: 700 7pt "JetBrains Mono", monospace; letter-spacing: 0.14em; text-transform: uppercase; color: #5b7383; margin-bottom: 2.5mm; }
+#informe .barra { display: grid; grid-template-columns: 30mm 1fr 15mm; gap: 2.5mm; align-items: center; margin: 1.6mm 0; font-size: 8.5pt; }
+#informe .barra span { display: flex; align-items: center; gap: 1.6mm; color: #22323d; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#informe .barra span i { width: 2.6mm; height: 2.6mm; border-radius: 0.6mm; flex: none; }
+#informe .barra em { height: 2.2mm; background: #edf2f6; border-radius: 2mm; overflow: hidden; }
+#informe .barra em u { display: block; height: 100%; border-radius: 2mm; background: linear-gradient(90deg, #2b8fd6, #5cc8ff); }
+#informe .barra b { text-align: right; font: 600 8.5pt "JetBrains Mono", monospace; }
+#informe .mapas { display: grid; grid-template-columns: 1fr 1fr; gap: 4mm; }
+#informe figure { margin: 0; }
+#informe figure img { width: 100%; height: 72mm; object-fit: cover; border-radius: 3mm; display: block; background: #0a1c29; }
+#informe figcaption { margin-top: 1.6mm; font-size: 8pt; color: #5b7383; }
+#informe figcaption b { color: #0d1b26; }
+#informe .notas { margin-top: 5mm; }
+#informe .notas p { margin: 0; font-size: 8.8pt; color: #33444f; }
+#informe .balance { display: flex; height: 5mm; border-radius: 2mm; overflow: hidden; background: #edf2f6; }
+#informe .balance u { display: block; height: 100%; }
+#informe .b-esc { background: #2b8fd6; }
+#informe .b-inf { background: #9b7a4f; }
+#informe .balance-ley { display: flex; gap: 5mm; margin-top: 1.6mm; font-size: 8pt; color: #33444f; }
+#informe .balance-ley i { display: inline-block; width: 2.6mm; height: 2.6mm; border-radius: 0.6mm; margin-right: 1.2mm; vertical-align: -0.3mm; }
+#informe .vacio { color: #5b7383; font-style: italic; }
+#informe .semaforo td { padding: 2.2mm 0; border-bottom: 0.25mm solid #e8eef3; vertical-align: middle; }
+#informe .semaforo td:first-child small { display: block; color: #5b7383; font-size: 8pt; }
+#informe .semaforo td:nth-child(2) { text-align: right; font: 600 8.6pt "JetBrains Mono", monospace; padding-right: 4mm; white-space: nowrap; }
+#informe .semaforo td:last-child { width: 20mm; text-align: right; }
+#informe .semaforo span { display: inline-block; min-width: 16mm; text-align: center; font: 700 7.4pt "JetBrains Mono", monospace; letter-spacing: 0.08em; text-transform: uppercase; color: #fff; padding: 1mm 2mm; border-radius: 10mm; }
+#informe .semaforo .n0 { background: #16a06d; }
+#informe .semaforo .n1 { background: #d9921d; }
+#informe .semaforo .n2 { background: #d9532f; }
+#informe .recs { margin: 0; padding: 0; list-style: none; counter-reset: rec; }
+#informe .recs li { counter-increment: rec; position: relative; padding: 0 0 2.6mm 9mm; font-size: 9pt; color: #22323d; }
+#informe .recs li::before { content: counter(rec); position: absolute; left: 0; top: 0; width: 5.6mm; height: 5.6mm; border-radius: 50%; background: #0a1c29; color: #5cc8ff; font: 700 7.5pt "JetBrains Mono", monospace; display: grid; place-items: center; }
+#informe .metodo { margin-top: 8mm; padding: 3.5mm 4mm; border-radius: 3mm; background: #f5f9fc; border: 0.3mm solid #dbe6ee; font-size: 7.6pt; color: #4a5e6b; line-height: 1.55; }
+#informe .hoja-pie { position: absolute; left: 15mm; right: 15mm; bottom: 8mm; display: flex; justify-content: space-between; align-items: center; padding-top: 2.5mm; border-top: 0.25mm solid #dbe6ee;
+  font: 500 7pt "JetBrains Mono", monospace; color: #7a909e; }
+#informe .marca-pie { display: inline-flex; align-items: center; gap: 1.4mm; font: 800 9pt Manrope, sans-serif; color: #0d1b26; }
+#informe .marca-pie svg { width: 4mm; height: 4mm; }

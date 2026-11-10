@@ -4,6 +4,7 @@ import { crearCapaLluvia } from "./lluvia_gl.js";
 import { redCauces } from "./cauces.js";
 import { registrarProtocolo, publicarCapa } from "./capa_teselas.js";
 import { laminasDeAgua } from "./agua.js";
+import { informeHTML } from "./informe.js";
 
 registrarProtocolo();
 import { cargarCopernicus, cargarArchivo, mascara, esquinas, afin, areaAnillo } from "./dem.js";
@@ -35,7 +36,7 @@ if (TOKEN && !MODO_DEMO) {
     chip.className = "usuario";
     chip.innerHTML = `<span title="${u.correo}">${(u.nombre || u.correo).replace(/[<>&]/g, "")}${u.empresa ? ` · ${u.empresa.replace(/[<>&]/g, "")}` : ""}</span><button type="button">Salir</button>`;
     chip.querySelector("button").onclick = salir;
-    document.querySelector("#panel .marca").after(chip);
+    document.querySelector("#panel .riel").after(chip);
   }).catch(() => {});
 }
 const fmt = (v, d = 0) => Number(v).toLocaleString("es-CL", { maximumFractionDigits: d, minimumFractionDigits: d });
@@ -132,9 +133,10 @@ function empezarDibujo() {
   E.anillo = null; E.vertices = []; E.cursor = null; E.dibujando = true;
   mapa.doubleClickZoom.disable();
   mapa.getCanvas().style.cursor = "crosshair";
-  $("b-dibujar").textContent = "Cancelar dibujo";
+  $("b-dibujar").querySelector("span").textContent = "Cancelar dibujo";
   $("b-dibujar").classList.add("activo");
   $("ayuda-dibujo").hidden = false;
+  actualizarRiel();
   $("info-poligono").hidden = true;
   actualizarBotonAnalizar();
   dibujarPoligono();
@@ -144,7 +146,7 @@ function terminarDibujo(cerrar) {
   E.dibujando = false;
   mapa.getCanvas().style.cursor = "";
   setTimeout(() => mapa.doubleClickZoom.enable(), 300);
-  $("b-dibujar").textContent = "Dibujar polígono";
+  $("b-dibujar").querySelector("span").textContent = "Dibujar polígono";
   $("b-dibujar").classList.remove("activo");
   $("ayuda-dibujo").hidden = true;
   // quitar vértices repetidos (el doble clic agrega dos)
@@ -158,6 +160,7 @@ function terminarDibujo(cerrar) {
   E.vertices = []; E.cursor = null;
   dibujarPoligono();
   actualizarBotonAnalizar();
+  actualizarRiel();
 }
 
 $("b-dibujar").onclick = () => (E.dibujando ? terminarDibujo(false) : empezarDibujo());
@@ -182,19 +185,131 @@ document.addEventListener("keydown", (e) => {
   if (e.key === "Backspace" && document.activeElement === document.body) { E.vertices.pop(); dibujarPoligono(); }
 });
 
-// ---------- búsqueda de lugares (Nominatim, solo al presionar Enter) ----------
+// ---------- búsqueda con autocompletado (Photon / OpenStreetMap; Nominatim de respaldo) ----------
+const BUSQ = { items: [], sel: -1, t: 0, n: 0 };
+const CAJA_CHILE = "-76.5,-56.5,-66,-17";
+const TIPOS = { city: "Ciudad", town: "Ciudad", village: "Pueblo", hamlet: "Localidad", locality: "Localidad", isolated_dwelling: "Localidad",
+  suburb: "Barrio", neighbourhood: "Barrio", quarter: "Barrio", residential: "Calle", primary: "Calle", secondary: "Calle", tertiary: "Calle",
+  street: "Calle", house: "Dirección", county: "Provincia", state: "Región", district: "Comuna", administrative: "Comuna", peak: "Cerro",
+  volcano: "Volcán", water: "Agua", lake: "Lago", river: "Río", stream: "Estero", beach: "Playa", bay: "Bahía", island: "Isla", valley: "Valle",
+  farm: "Predio", farmland: "Predio", park: "Parque", national_park: "Parque", nature_reserve: "Reserva" };
+const ZOOM_TIPO = { house: 17, street: 15.5, residential: 15.5, village: 14, hamlet: 14.5, locality: 14, suburb: 14, neighbourhood: 15, city: 12, town: 13, peak: 13.5 };
+const sinTildes = (x) => x.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+const escH = (x) => String(x ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+function resaltar(txt, q) {
+  const i = sinTildes(txt).indexOf(sinTildes(q.trim()));
+  if (i < 0 || !q.trim()) return escH(txt);
+  const n = q.trim().length;
+  return escH(txt.slice(0, i)) + "<mark>" + escH(txt.slice(i, i + n)) + "</mark>" + escH(txt.slice(i + n));
+}
+function margenMapa() {
+  const p = $("panel").getBoundingClientRect();
+  return innerWidth > 720 ? { left: p.right + 40, right: 60, top: 70, bottom: 50 } : { left: 30, right: 30, top: 70, bottom: innerHeight - p.top + 30 };
+}
+function itemPhoton(f) {
+  const p = f.properties;
+  const nombre = p.housenumber && p.street ? `${p.street} ${p.housenumber}` : p.name || p.street || "";
+  const corto = (x) => x && x.replace(/^Provincia de(l)? /, "").replace(/^Región (de |del )?/, "").replace("Libertador General Bernardo O'Higgins", "O'Higgins")
+    .replace(/^Metropolitana de Santiago$/, "Región Metropolitana").replace(/^Aysén del General Carlos Ibáñez del Campo$/, "Aysén");
+  const ctx = [p.street && !p.housenumber && p.name !== p.street ? p.street : null, p.district, p.city, corto(p.county), corto(p.state)]
+    .filter((x, i, a) => x && x !== nombre && a.indexOf(x) === i).slice(0, 3).join(", ");
+  const tipo = TIPOS[p.osm_value] || TIPOS[p.type] || "";
+  return { nombre, ctx, tipo, centro: f.geometry.coordinates, extent: p.extent, zoom: ZOOM_TIPO[p.osm_value] || ZOOM_TIPO[p.type] || 13 };
+}
+function coordenadas(q) {
+  const m = q.match(/^\s*(-?\d{1,2}(?:[.,]\d+)?)\s*[,;\s]\s*(-?\d{1,3}(?:[.,]\d+)?)\s*$/);
+  if (!m) return null;
+  const lat = Number(m[1].replace(",", ".")), lon = Number(m[2].replace(",", "."));
+  if (Math.abs(lat) > 90 || Math.abs(lon) > 180) return null;
+  return { nombre: `${fmt(lat, 5)}°, ${fmt(lon, 5)}°`, ctx: "Ir a estas coordenadas", tipo: "Punto", centro: [lon, lat], zoom: 15 };
+}
+function pintarSugerencias(q, vacia = "") {
+  const ul = $("sugerencias");
+  if (!BUSQ.items.length && !vacia) { cerrarSugerencias(); return; }
+  ul.innerHTML = BUSQ.items.length
+    ? BUSQ.items.map((it, i) => `<li role="option" id="sug-${i}" data-i="${i}" class="${i === BUSQ.sel ? "on" : ""}" aria-selected="${i === BUSQ.sel}">
+        <svg aria-hidden="true"><use href="#i-pin" /></svg><div><b>${resaltar(it.nombre, q)}</b>${it.ctx ? `<small>${escH(it.ctx)}</small>` : ""}</div>${it.tipo ? `<em>${escH(it.tipo)}</em>` : ""}</li>`).join("")
+    : `<li class="vacia">${escH(vacia)}</li>`;
+  ul.hidden = false;
+  $("q").setAttribute("aria-expanded", "true");
+  $("q").setAttribute("aria-activedescendant", BUSQ.sel >= 0 ? `sug-${BUSQ.sel}` : "");
+}
+function cerrarSugerencias() {
+  $("sugerencias").hidden = true;
+  $("q").setAttribute("aria-expanded", "false");
+  BUSQ.sel = -1;
+}
+async function sugerir(q) {
+  const n = ++BUSQ.n;
+  const c = coordenadas(q);
+  if (c) { BUSQ.items = [c]; BUSQ.sel = 0; pintarSugerencias(q); return; }
+  if (q.trim().length < 2) { BUSQ.items = []; cerrarSugerencias(); return; }
+  $("buscar").classList.add("cargando");
+  try {
+    const r = await fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(q)}&limit=15&bbox=${CAJA_CHILE}`);
+    const d = await r.json();
+    if (n !== BUSQ.n) return; // llegó una respuesta más nueva
+    const vistos = new Set();
+    BUSQ.items = d.features.filter((f) => f.properties.countrycode === "CL").map(itemPhoton)
+      .filter((it) => { const k = it.nombre + "|" + it.ctx; if (!it.nombre || vistos.has(k)) return false; vistos.add(k); return true; }).slice(0, 7);
+    BUSQ.sel = BUSQ.items.length ? 0 : -1;
+    pintarSugerencias(q, "Sin resultados. Prueba con la comuna o una calle cercana.");
+  } catch {
+    if (n === BUSQ.n) { BUSQ.items = []; pintarSugerencias(q, "No pude buscar. Revisa tu conexión."); }
+  } finally {
+    if (n === BUSQ.n) $("buscar").classList.remove("cargando");
+  }
+}
+function irA(it) {
+  cerrarSugerencias();
+  $("q").value = it.nombre;
+  $("q").blur();
+  estado("");
+  if (it.extent) {
+    const [o, n, e_, s_] = it.extent;
+    mapa.fitBounds([[o, s_], [e_, n]], { padding: margenMapa(), maxZoom: 16, duration: 1600, essential: true });
+  } else {
+    const m = margenMapa();
+    mapa.flyTo({ center: it.centro, zoom: it.zoom, offset: [(m.left - m.right) / 2, (m.top - m.bottom) / 2], duration: 1600, essential: true });
+  }
+}
+$("q").addEventListener("input", () => {
+  clearTimeout(BUSQ.t);
+  const q = $("q").value;
+  BUSQ.t = setTimeout(() => sugerir(q), 200);
+});
+$("q").addEventListener("keydown", (e) => {
+  const abierto = !$("sugerencias").hidden && BUSQ.items.length;
+  if (e.key === "ArrowDown" && abierto) { e.preventDefault(); BUSQ.sel = (BUSQ.sel + 1) % BUSQ.items.length; pintarSugerencias($("q").value); }
+  else if (e.key === "ArrowUp" && abierto) { e.preventDefault(); BUSQ.sel = (BUSQ.sel - 1 + BUSQ.items.length) % BUSQ.items.length; pintarSugerencias($("q").value); }
+  else if (e.key === "Escape") cerrarSugerencias();
+});
+$("q").addEventListener("focus", () => { if (BUSQ.items.length && $("q").value.trim()) pintarSugerencias($("q").value); });
+$("q").addEventListener("blur", () => setTimeout(cerrarSugerencias, 150));
+$("sugerencias").addEventListener("mousedown", (e) => {
+  const li = e.target.closest("li[data-i]");
+  if (!li) return;
+  e.preventDefault();
+  irA(BUSQ.items[Number(li.dataset.i)]);
+});
 $("buscar").onsubmit = async (e) => {
   e.preventDefault();
   const q = $("q").value.trim();
   if (!q) return;
+  clearTimeout(BUSQ.t);
+  if (BUSQ.items.length && !$("sugerencias").hidden) return irA(BUSQ.items[Math.max(0, BUSQ.sel)]);
+  const c = coordenadas(q);
+  if (c) return irA(c);
+  // respaldo: Nominatim (direcciones con número que Photon no tiene)
+  $("buscar").classList.add("cargando");
   try {
     const r = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=cl&q=${encodeURIComponent(q)}`);
     const [res] = await r.json();
     if (!res) return estado("No encontré ese lugar.", true);
-    estado("");
-    const [s, n, o, e_] = res.boundingbox.map(Number);
-    mapa.fitBounds([[o, s], [e_, n]], { padding: 60, maxZoom: 16 });
+    const [s_, n, o, e_] = res.boundingbox.map(Number);
+    irA({ nombre: q, extent: [o, n, e_, s_] });
   } catch { estado("No pude buscar el lugar.", true); }
+  finally { $("buscar").classList.remove("cargando"); }
 };
 
 // ---------- DEM propio ----------
@@ -270,6 +385,14 @@ function limpiarResultados() {
   mapa.getSource("cauces")?.setData(vacio);
   mapa.getSource("agua")?.setData(vacio);
   if ($("t-3d").checked) { $("t-3d").checked = false; alternar3D(false); }
+  actualizarRiel();
+}
+
+// riel de progreso bajo el logo
+function actualizarRiel() {
+  const listo = { "paso-terreno": true, "paso-resultados": !!E.an, "paso-tormenta": !!E.an?.tormenta, "paso-exportar": !!E.an?.tormenta };
+  document.querySelectorAll(".riel li").forEach((li) => li.classList.toggle("on", listo[li.dataset.r]));
+  $("guia").hidden = !!(E.an || E.anillo || E.dibujando || MODO_DEMO);
 }
 
 function tarjeta(valor, texto, clase = "") {
@@ -291,6 +414,7 @@ function mostrarResultados() {
   document.querySelector('[data-capa="cobertura"]').disabled = true;
   if (E.capa === "cobertura") elegirCapa("escurrimiento");
   cargarLluvias();
+  actualizarRiel();
   $("aviso-dsm").hidden = !E.g.esDSM;
   // curvas de nivel
   const eq = Math.max(equidistancia(st.zmax - st.zmin), E.g.dx >= 10 ? 1 : 0.25);
@@ -529,10 +653,10 @@ function mostrarIDF() {
   const fila = E.lluvias.P[E.T];
   const { a } = ajusteIDF(fila);
   const mm = (v) => `${fmt(v, v < 10 ? 1 : 0)} mm`;
-  $("idf").innerHTML = `<b>Lluvia de ${E.T} años aquí</b>
-    <table><tr><td>En 1 hora <small>(estimada)</small></td><td>${mm(a)}</td></tr>
-    <tr><td>En 6 horas</td><td>${mm(fila[1])}</td></tr><tr><td>En 24 horas</td><td>${mm(fila[3])}</td></tr>
-    <tr><td>En 3 días</td><td>${mm(fila[5])}</td></tr></table>`;
+  const filas = [["1 hora", a, true], ["6 horas", fila[1]], ["24 horas", fila[3]], ["3 días", fila[5]]];
+  const max = Math.max(...filas.map((f) => f[1]));
+  $("idf").innerHTML = `<div class="idf-tit"><b>Lluvia de ${E.T} años aquí</b><span>GPEX${E.lluvias.distanciaKm > 3 ? ` · ${fmt(E.lluvias.distanciaKm)} km` : ""}</span></div>` +
+    filas.map(([n, v, est]) => `<div class="idf-fila"><span>${n}${est ? " <small>est.</small>" : ""}</span><i><u style="width:${((100 * v) / max).toFixed(1)}%"></u></i><b>${mm(v)}</b></div>`).join("");
 }
 
 document.querySelectorAll(".retornos button").forEach((b) => (b.onclick = () => {
@@ -546,6 +670,7 @@ $("suelo-txt").textContent = SUELOS[$("suelo").value];
 async function simularTormenta() {
   if (!E.an || !E.lluvias) return;
   $("b-tormenta").disabled = true;
+  $("b-tormenta").classList.add("simulando");
   try {
     if (!E.an.clase) {
       try {
@@ -571,6 +696,8 @@ async function simularTormenta() {
     estado(err.message || String(err), true);
   } finally {
     $("b-tormenta").disabled = false;
+    $("b-tormenta").classList.remove("simulando");
+    actualizarRiel();
   }
 }
 $("b-tormenta").onclick = simularTormenta;
@@ -654,37 +781,119 @@ $("b-tif").onclick = async () => {
   }
 };
 
-function informeTormenta(fila) {
-  const t = E.an.tormenta;
-  if (!t) return "";
-  const s = t.stats;
-  return `<h2>Tormenta de ${t.T} años</h2><table>${fila("Lluvia en 24 h", `${fmt(t.P24, 1)} mm`)}${fila("Agua que cae sobre el terreno", m3(s.llueve))}${fila("Escurre por la superficie", m3(s.genera))}${fila("Se infiltra", m3(s.infiltra))}${fila("Queda en pozas", s.aCharcos ? `${m3(s.enCharcos)} en ${ha(s.aCharcos)}` : "no se forman")}${fila("Sale del terreno", m3(s.sale))}${fila("Entra desde terrenos vecinos", m3(s.entra))}${fila("Caudal máximo en el cauce principal", caudalTxt(t.qVis ?? s.qMax))}${fila("Suelo / número de curva medio", `tipo ${t.suelo} / ${fmt(s.cnMedio)}`)}</table><p class="nota">Lluvias: GPEX (Gründemann et al. 2021, CC BY 4.0), base satelital MSWEP de 0,1°. Escorrentía: número de curva SCS con cobertura ESA WorldCover 2021 (CC BY 4.0). Caudal: método racional con tiempo de concentración de California; las duraciones menores a 3 h se extrapolan.</p>`;
+// ---------- informe PDF ----------
+// zona del mapa que no tapa el panel (en px de pantalla)
+function zonaVisible() {
+  const p = $("panel").getBoundingClientRect();
+  if (innerWidth > 720) { const x = Math.round(p.right + 8); return { x, y: 0, w: innerWidth - x, h: innerHeight }; }
+  return { x: 0, y: 0, w: innerWidth, h: Math.round(p.top) };
 }
-
 // captura del mapa: se toma dentro del evento "render", cuando el cuadro aún está en el búfer
-const capturarMapa = () => new Promise((ok) => {
-  mapa.once("render", () => ok(mapa.getCanvas().toDataURL("image/jpeg", 0.9)));
+const capturarMapa = (z) => new Promise((ok) => {
+  mapa.once("render", () => {
+    const cv = mapa.getCanvas(), k = cv.width / cv.clientWidth;
+    const W = Math.round(z.w * k), H = Math.round(z.h * k), s = Math.min(1, 1800 / W);
+    const o = document.createElement("canvas");
+    o.width = Math.round(W * s); o.height = Math.round(H * s);
+    o.getContext("2d").drawImage(cv, Math.round(z.x * k), Math.round(z.y * k), W, H, 0, 0, o.width, o.height);
+    ok(o.toDataURL("image/jpeg", 0.88));
+  });
   mapa.triggerRepaint();
 });
+const mapaQuieto = (max = 9000) => new Promise((ok) => {
+  const t = setTimeout(ok, max);
+  mapa.once("idle", () => { clearTimeout(t); setTimeout(ok, 250); });
+  mapa.triggerRepaint();
+});
+async function nombreLugar(lon, lat) {
+  if (MODO_DEMO && typeof demo !== "undefined" && demo) return demo.nombre.replace(" · ", ", ");
+  try {
+    const ctl = new AbortController();
+    const t = setTimeout(() => ctl.abort(), 4000);
+    const r = await fetch(`https://photon.komoot.io/reverse?lon=${lon}&lat=${lat}&limit=1`, { signal: ctl.signal });
+    clearTimeout(t);
+    const p = (await r.json()).features?.[0]?.properties;
+    if (p) {
+      const comuna = p.city || p.county || p.name;
+      const txt = [p.district && p.district !== comuna ? p.district : null, comuna, p.state].filter(Boolean).join(", ");
+      if (txt) return `Terreno en ${txt}`;
+    }
+  } catch {}
+  return `Terreno en ${fmt(lat, 4)}°, ${fmt(lon, 4)}°`;
+}
 
 $("b-informe").onclick = async () => {
-  const st = E.an.stats, g = E.g;
-  const [lon, lat] = mapa.getCenter().toArray();
-  const img = await capturarMapa();
-  const fila = (a, b) => `<tr><td>${a}</td><td>${b}</td></tr>`;
-  $("informe").innerHTML = `
-    <h1>Informe de terreno</h1>
-    <p class="meta">Generado con Gotyx el ${new Date().toLocaleDateString("es-CL", { dateStyle: "long" })} · centro aprox. ${fmt(lat, 5)}, ${fmt(lon, 5)} · fuente: ${g.fuente} · celda ${fmt(g.dx, 1)} × ${fmt(g.dy, 1)} m</p>
-    <img src="${img}" alt="Mapa del terreno" />
-    <h2>Terreno</h2>
-    <table>${fila("Superficie", ha(st.area))}${fila("Cota mínima / máxima", `${fmt(st.zmin, 1)} / ${fmt(st.zmax, 1)} m s.n.m.`)}${fila("Desnivel", `${fmt(st.zmax - st.zmin, 1)} m`)}${fila("Pendiente media", `${fmt(st.pendMedia, 1)} %`)}</table>
-    <h2>Pendientes</h2>
-    <table>${CLASES_PEND.map((k, i) => fila(k.txt, `${fmt(100 * st.clases[i], 1)} % · ${ha(st.clases[i] * st.area)}`)).join("")}</table>
-    <h2>Agua</h2>
-    <table>${fila("Zonas que se encharcan (≥ 5 cm)", st.encArea ? ha(st.encArea) : "no se detectan")}${fila("Volumen que pueden retener", m3(st.encVol))}${fila("Profundidad máxima", `${fmt(st.encMax, 2)} m`)}${fila("Mayor cuenca que cruza el terreno", ha(st.accMax))}</table>
-    ${informeTormenta(fila)}
-    <p class="nota">${g.esDSM ? "Copernicus GLO-30 es un modelo digital de superficie de ~30 m: incluye vegetación y construcciones y no capta detalles menores a la celda. " : ""}Resultado referencial de prediagnóstico; no reemplaza un levantamiento topográfico ni un estudio hidrológico.</p>`;
-  window.print();
+  if (E.haciendoInforme || !E.an) return;
+  E.haciendoInforme = true;
+  const ov = document.createElement("div");
+  ov.className = "demo-carga";
+  ov.innerHTML = `<div class="dc-caja"><div class="dc-gota"><svg viewBox="0 0 32 32"><path d="M16 2.5S6 13.6 6 20a10 10 0 0 0 20 0C26 13.6 16 2.5 16 2.5Z"/></svg></div>
+    <div class="dc-titulo">Generando tu informe</div><ol class="dc-pasos"><li>Ubicando el terreno</li><li>Capturando la vista actual</li>
+    <li>Mapa de escurrimiento</li><li>Mapa de acumulación de agua</li><li>Armando el PDF</li></ol><div class="dc-barra"><i></i></div></div>`;
+  document.body.append(ov);
+  const paso = (k) => {
+    ov.querySelectorAll("li").forEach((li, i) => { li.classList.toggle("ok", i < k); li.classList.toggle("en", i === k); });
+    ov.querySelector(".dc-barra i").style.width = `${(100 * (k + 0.5)) / 5}%`;
+  };
+  const previo = { capa: E.capa, centro: mapa.getCenter(), zoom: mapa.getZoom(), bearing: mapa.getBearing(), pitch: mapa.getPitch(), lluvia: lluvia.activa };
+  detenerOrbita();
+  try {
+    paso(0);
+    const [lon, lat] = centroTerreno();
+    const lugar = nombreLugar(lon, lat);
+    const z = zonaVisible();
+    if (previo.lluvia) lluviaGL.detener(); // sin gotas en las imágenes
+    paso(1);
+    await mapaQuieto(4000);
+    const imgs = { vista: await capturarMapa(z) };
+    // vistas cenitales del terreno completo
+    paso(2);
+    const c = E.anillo || [...esquinas(E.g)];
+    const xs = c.map((p) => p[0]), ys = c.map((p) => p[1]);
+    const m = 36;
+    mapa.fitBounds([[Math.min(...xs), Math.min(...ys)], [Math.max(...xs), Math.max(...ys)]],
+      { padding: { left: z.x + m, right: innerWidth - z.x - z.w + m, top: z.y + m, bottom: innerHeight - z.y - z.h + m }, pitch: 0, bearing: 0, duration: 0 });
+    if (E.capa !== "escurrimiento") elegirCapa("escurrimiento");
+    await mapaQuieto();
+    imgs.escurrimiento = await capturarMapa(z);
+    paso(3);
+    elegirCapa("encharcamiento");
+    await mapaQuieto(5000);
+    imgs.encharcamiento = await capturarMapa(z);
+    paso(4);
+    const t = E.an.tormenta;
+    let idf = [];
+    if (t && E.lluvias) {
+      const fila = E.lluvias.P[t.T];
+      idf = [["1 hora (est.)", ajusteIDF(fila).a], ["6 horas", fila[1]], ["24 horas", fila[3]], ["3 días", fila[5]]];
+    }
+    const hoy = new Date();
+    const id = `GX-${hoy.toISOString().slice(2, 10).replace(/-/g, "")}-${Math.random().toString(16).slice(2, 6).toUpperCase()}`;
+    const nombre = await lugar;
+    $("informe").innerHTML = informeHTML({ st: E.an.stats, t, g: E.g, imgs, clasesPend: CLASES_PEND, idf, lugar: nombre, lat, lon, id,
+      fecha: hoy.toLocaleDateString("es-CL", { dateStyle: "long" }) });
+    await Promise.all([...$("informe").querySelectorAll("img")].map((i) => i.decode().catch(() => {})));
+    if (document.fonts?.ready) await document.fonts.ready;
+    ov.querySelector(".dc-barra i").style.width = "100%";
+    // restaurar la vista del usuario antes de abrir el diálogo de impresión
+    elegirCapa(previo.capa);
+    mapa.jumpTo({ center: previo.centro, zoom: previo.zoom, bearing: previo.bearing, pitch: previo.pitch });
+    if (previo.lluvia) { $("t-lluvia").checked = true; iniciarLluvia(); }
+    ov.remove();
+    const titulo = document.title;
+    document.title = `Informe Gotyx - ${nombre.replace(/^Terreno en /, "")} - ${hoy.toISOString().slice(0, 10)}`;
+    window.print();
+    document.title = titulo;
+  } catch (err) {
+    console.error(err);
+    ov.remove();
+    elegirCapa(previo.capa);
+    mapa.jumpTo({ center: previo.centro, zoom: previo.zoom, bearing: previo.bearing, pitch: previo.pitch });
+    if (previo.lluvia) { $("t-lluvia").checked = true; iniciarLluvia(); }
+    estado("No pude generar el informe: " + (err.message || err), true);
+  } finally {
+    E.haciendoInforme = false;
+  }
 };
 
 // ---------- panel plegable (celular) ----------

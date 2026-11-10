@@ -3,6 +3,7 @@
 //    aquí se reenvían lecturas por rango. Sin sesión solo se entregan las teselas de la demo abierta.
 // 2) Solicitudes de demo (POST /demo): se guardan en KV y, si hay clave de Resend, avisan por correo.
 // 3) Cuentas por invitación (POST /auth/login, /auth/logout, GET /auth/yo) con claves PBKDF2 y sesiones en KV.
+//    El cliente crea su propia contraseña con un enlace de un solo uso (/auth/enlace, /auth/definir, /auth/recuperar).
 // 4) Administración (/admin/*) protegida con el secreto ADMIN_KEY.
 // Enlaces KV: DATOS. Secretos: ADMIN_KEY, RESEND_API_KEY (opcional), AVISO_CORREO (opcional).
 
@@ -117,25 +118,45 @@ async function enviarCorreo(env, { to, subject, text, html, reply_to }) {
   }
 }
 const escHtml = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-function correoInvitacion({ nombre, correo, clave, url, nueva }) {
+const SITIO = (env) => (env.SITIO || "https://gotyx.cl").replace(/\/$/, "");
+const ENLACE_HORAS = { invitacion: 24 * 7, restablecer: 24 * 3, recuperar: 2 };
+function correoEnlace({ nombre, correo, enlace, tipo }) {
   const saludo = nombre ? `Hola ${nombre.split(" ")[0]}` : "Hola";
-  const intro = nueva ? "Generamos una clave nueva para tu cuenta de Gotyx." : "Te creamos tu cuenta en Gotyx, la plataforma de simulación hidrológica para terrenos en Chile.";
-  const text = `${saludo},\n\n${intro}\n\nIngresa en: ${url}\nCorreo: ${correo}\nClave: ${clave}\n\nTe recomendamos guardar la clave en tu gestor de contraseñas.\nCualquier duda, responde este correo.\n\nEquipo Gotyx\nhttps://gotyx.cl`;
+  const T = {
+    invitacion: ["Tu cuenta de Gotyx está lista", "Te creamos tu cuenta en Gotyx, la plataforma de simulación hidrológica para terrenos en Chile. Para entrar, crea tu contraseña:", "Crear mi contraseña →", "El enlace vale por 7 días."],
+    restablecer: ["Crea una nueva contraseña para Gotyx", "Te enviamos un enlace para crear una nueva contraseña en Gotyx:", "Crear nueva contraseña →", "El enlace vale por 3 días."],
+    recuperar: ["Recupera tu acceso a Gotyx", "Recibimos una solicitud para restablecer tu contraseña de Gotyx. Si fuiste tú, crea una nueva aquí:", "Crear nueva contraseña →", "El enlace vale por 2 horas. Si no lo pediste, ignora este correo: tu contraseña no cambia."],
+  }[tipo];
+  const [asunto, intro, boton, vence] = T;
+  const text = `${saludo},\n\n${intro}\n\n${enlace}\n\nTu usuario es: ${correo}\n${vence}\n\nCualquier duda, responde este correo.\n\nEquipo Gotyx\nhttps://gotyx.cl`;
   const html = `<!doctype html><html><body style="margin:0;background:#050e16;padding:32px 12px;font-family:Arial,Helvetica,sans-serif">
 <table role="presentation" width="100%" cellspacing="0" cellpadding="0"><tr><td align="center">
 <table role="presentation" width="560" cellspacing="0" cellpadding="0" style="max-width:560px;background:#0a1c29;border:1px solid #1d3a4f;border-radius:18px">
 <tr><td style="padding:32px 34px 8px"><span style="font-size:24px;font-weight:800;color:#eaf6ff">Got<span style="color:#5cc8ff">yx</span></span></td></tr>
 <tr><td style="padding:8px 34px 0;color:#eaf6ff;font-size:16px;line-height:1.6">
 <p style="margin:0 0 14px">${escHtml(saludo)},</p><p style="margin:0 0 22px;color:#b5cbd8">${escHtml(intro)}</p>
+<p style="margin:0 0 22px"><a href="${escHtml(enlace)}" style="background:#5cc8ff;color:#050e16;text-decoration:none;font-weight:800;padding:14px 24px;border-radius:12px;display:inline-block">${escHtml(boton)}</a></p>
 <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#06131d;border:1px solid #1d3a4f;border-radius:12px">
-<tr><td style="padding:16px 18px;font-family:Consolas,Menlo,monospace;font-size:14px;line-height:1.9;color:#eaf6ff">
-<span style="color:#8fb0c4">Correo</span>&nbsp; ${escHtml(correo)}<br><span style="color:#8fb0c4">Clave</span>&nbsp;&nbsp; <b style="color:#8ff0ff">${escHtml(clave)}</b></td></tr></table>
-<p style="margin:26px 0"><a href="${escHtml(url)}" style="background:#5cc8ff;color:#050e16;text-decoration:none;font-weight:800;padding:14px 24px;border-radius:12px;display:inline-block">Ingresar a Gotyx →</a></p>
-<p style="margin:0 0 28px;color:#8fb0c4;font-size:14px">Te recomendamos guardar la clave en tu gestor de contraseñas. Si tienes dudas, responde este correo.</p>
+<tr><td style="padding:14px 18px;font-family:Consolas,Menlo,monospace;font-size:14px;color:#eaf6ff"><span style="color:#8fb0c4">Usuario</span>&nbsp; ${escHtml(correo)}</td></tr></table>
+<p style="margin:22px 0 28px;color:#8fb0c4;font-size:14px">${escHtml(vence)} Si el botón no funciona, copia este enlace en tu navegador:<br><span style="color:#5cc8ff;word-break:break-all">${escHtml(enlace)}</span></p>
 </td></tr>
 <tr><td style="padding:18px 34px 26px;border-top:1px solid #1d3a4f;color:#5f7d90;font-size:12px">Gotyx · Simulación hidrológica para cualquier terreno de Chile · <a href="https://gotyx.cl" style="color:#5cc8ff">gotyx.cl</a></td></tr>
 </table></td></tr></table></body></html>`;
-  return { text, html };
+  return { asunto, text, html };
+}
+// enlace de un solo uso: el token va solo en el correo; en KV se guarda su hash
+async function crearEnlace(env, correo, tipo, base) {
+  const k = azar(32);
+  const horas = ENLACE_HORAS[tipo];
+  await env.DATOS.put(`enlace:${await sha256(k)}`, JSON.stringify({ correo, tipo, exp: Date.now() + horas * 3600e3 }), { expirationTtl: horas * 3600 });
+  return `${base}?k=${k}`;
+}
+async function leerEnlace(env, k) {
+  if (!/^[a-f0-9]{64}$/.test(String(k || ""))) return null;
+  const id = `enlace:${await sha256(k)}`;
+  const e = await env.DATOS.get(id, "json");
+  if (!e || e.exp < Date.now()) return null;
+  return { id, ...e };
 }
 
 // ---------- solicitudes de demo ----------
@@ -171,12 +192,56 @@ async function login(req, env, cors) {
   const calculada = await pbkdf2(clave, u?.sal || "sal-ficticia", u?.iter || ITER); // mismo costo aunque no exista
   if (!u || !igual(calculada, u.hash)) return json({ error: "Correo o clave incorrectos." }, 401, cors);
   if (!u.activo) return json({ error: "Tu cuenta está desactivada. Escríbenos para reactivarla." }, 403, cors);
-  const token = azar(32);
-  const exp = Date.now() + SESION_DIAS * 86400e3;
-  await env.DATOS.put(`sesion:${await sha256(token)}`, JSON.stringify({ correo, exp }), { expirationTtl: SESION_DIAS * 86400 });
+  const token = await nuevaSesion(env, correo);
   u.ultimoIngreso = new Date().toISOString();
   await env.DATOS.put(`usuario:${correo}`, JSON.stringify(u));
   return json({ token, nombre: u.nombre, empresa: u.empresa }, 200, cors);
+}
+async function nuevaSesion(env, correo) {
+  const token = azar(32);
+  await env.DATOS.put(`sesion:${await sha256(token)}`, JSON.stringify({ correo, exp: Date.now() + SESION_DIAS * 86400e3 }), { expirationTtl: SESION_DIAS * 86400 });
+  return token;
+}
+async function verEnlace(req, env, cors) {
+  const b = await cuerpo(req);
+  if (!(await limitar(env, `enlace-ip:${ipDe(req)}`, 30, 900))) return json({ error: "Demasiados intentos. Espera 15 minutos." }, 429, cors);
+  const e = await leerEnlace(env, b?.k);
+  if (!e) return json({ error: "El enlace no es válido o ya venció. Pide uno nuevo con «¿Olvidaste tu contraseña?»." }, 410, cors);
+  const u = await env.DATOS.get(`usuario:${e.correo}`, "json");
+  if (!u) return json({ error: "La cuenta ya no existe." }, 410, cors);
+  return json({ correo: e.correo, nombre: u.nombre || "", tipo: e.tipo }, 200, cors);
+}
+async function definirClave(req, env, cors) {
+  const b = await cuerpo(req);
+  if (!(await limitar(env, `enlace-ip:${ipDe(req)}`, 30, 900))) return json({ error: "Demasiados intentos. Espera 15 minutos." }, 429, cors);
+  const clave = String(b?.clave ?? "");
+  if (clave.length < 8 || clave.length > 200) return json({ error: "La contraseña debe tener al menos 8 caracteres." }, 400, cors);
+  const e = await leerEnlace(env, b?.k);
+  if (!e) return json({ error: "El enlace no es válido o ya venció. Pide uno nuevo." }, 410, cors);
+  const u = await env.DATOS.get(`usuario:${e.correo}`, "json");
+  if (!u) return json({ error: "La cuenta ya no existe." }, 410, cors);
+  if (!u.activo) return json({ error: "Tu cuenta está desactivada. Escríbenos para reactivarla." }, 403, cors);
+  u.sal = azar(16); u.iter = ITER; u.hash = await pbkdf2(clave, u.sal);
+  u.claveDefinida = new Date().toISOString(); u.ultimoIngreso = u.claveDefinida;
+  await env.DATOS.put(`usuario:${e.correo}`, JSON.stringify(u));
+  await env.DATOS.delete(e.id);
+  return json({ token: await nuevaSesion(env, e.correo), nombre: u.nombre, empresa: u.empresa }, 200, cors);
+}
+async function recuperar(req, env, cors) {
+  const b = await cuerpo(req);
+  const correo = normalizarCorreo(b?.correo);
+  if (!CORREO_RE.test(correo)) return json({ error: "Escribe un correo válido." }, 400, cors);
+  if (!(await limitar(env, `recuperar-ip:${ipDe(req)}`, 10, 3600)) || !(await limitar(env, `recuperar:${correo}`, 3, 3600))) {
+    return json({ error: "Ya enviamos varios correos. Revisa tu bandeja (y spam) o espera una hora." }, 429, cors);
+  }
+  const u = await env.DATOS.get(`usuario:${correo}`, "json");
+  // misma respuesta exista o no la cuenta (no revela qué correos están registrados)
+  if (u && u.activo) {
+    const enlace = await crearEnlace(env, correo, "recuperar", `${SITIO(env)}/ingresar.html`);
+    const { asunto, text, html } = correoEnlace({ nombre: u.nombre, correo, enlace, tipo: "recuperar" });
+    await enviarCorreo(env, { to: correo, subject: asunto, text, html, reply_to: "hola@gotyx.cl" });
+  }
+  return json({ ok: true }, 200, cors);
 }
 async function logout(req, env, cors) {
   const m = (req.headers.get("Authorization") || "").match(/^Bearer ([a-f0-9]{64})$/);
@@ -231,24 +296,26 @@ async function admin(req, env, cors, ruta) {
     const previo = await env.DATOS.get(`usuario:${correo}`, "json");
     if (ruta === "/admin/usuarios" && previo) return json({ error: "Esa cuenta ya existe. Usa «Nueva clave»." }, 409, cors);
     if (ruta === "/admin/usuarios/clave" && !previo) return json({ error: "No existe." }, 404, cors);
-    const clave = claveNueva();
+    const nueva = ruta === "/admin/usuarios/clave";
+    // la cuenta nace con una clave aleatoria que nadie conoce: el cliente define la suya con el enlace
     const sal = azar(16);
     const u = {
       ...(previo || { creado: new Date().toISOString(), activo: true }),
       nombre: limpiar(b.nombre, 120) || previo?.nombre || "",
       empresa: limpiar(b.empresa, 160) || previo?.empresa || "",
-      sal, iter: ITER, hash: await pbkdf2(clave, sal),
+      ...(nueva ? {} : { sal, iter: ITER, hash: await pbkdf2(claveNueva() + azar(8), sal) }),
     };
     await env.DATOS.put(`usuario:${correo}`, JSON.stringify(u));
+    const base = /^https?:\/\/[^\s]+\/ingresar\.html$/.test(limpiar(b.url, 200)) ? limpiar(b.url, 200) : `${SITIO(env)}/ingresar.html`;
+    const tipo = nueva ? "restablecer" : "invitacion";
+    const enlace = await crearEnlace(env, correo, tipo, base);
     let correoEnviado = false, motivo = "";
     if (b.enviar) {
-      const url = limpiar(b.url, 200) || "https://gotyx.cl/ingresar.html";
-      const nueva = ruta === "/admin/usuarios/clave";
-      const { text, html } = correoInvitacion({ nombre: u.nombre, correo, clave, url, nueva });
-      const env1 = await enviarCorreo(env, { to: correo, subject: nueva ? "Tu nueva clave de Gotyx" : "Tu cuenta de Gotyx está lista", text, html, reply_to: "hola@gotyx.cl" });
+      const { asunto, text, html } = correoEnlace({ nombre: u.nombre, correo, enlace, tipo });
+      const env1 = await enviarCorreo(env, { to: correo, subject: asunto, text, html, reply_to: "hola@gotyx.cl" });
       correoEnviado = env1.ok; motivo = env1.motivo;
     }
-    return json({ correo, clave, correoEnviado, motivo }, 200, cors);
+    return json({ correo, enlace, tipo, correoEnviado, motivo }, 200, cors);
   }
   if (ruta === "/admin/usuarios/estado" && req.method === "POST") {
     const b = await cuerpo(req);
@@ -293,6 +360,9 @@ export default {
       if (ruta === "/auth/login" && req.method === "POST") return await login(req, env, cors);
       if (ruta === "/auth/logout" && req.method === "POST") return await logout(req, env, cors);
       if (ruta === "/auth/yo" && req.method === "GET") return await yo(req, env, cors);
+      if (ruta === "/auth/enlace" && req.method === "POST") return await verEnlace(req, env, cors);
+      if (ruta === "/auth/definir" && req.method === "POST") return await definirClave(req, env, cors);
+      if (ruta === "/auth/recuperar" && req.method === "POST") return await recuperar(req, env, cors);
       if (ruta.startsWith("/admin/")) return await admin(req, env, cors, ruta);
     } catch (e) {
       return json({ error: "Error interno." }, 500, cors);

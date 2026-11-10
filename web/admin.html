@@ -73,7 +73,7 @@
         <label style="display:flex;gap:10px;align-items:center;color:var(--suave);font-size:14px;margin:-6px 0 16px"><input type="checkbox" id="enviar" checked style="width:18px;height:18px;accent-color:var(--agua)" /> Enviar la invitación por correo al cliente (desde hola@gotyx.cl)</label>
         <div class="msj" id="msj-cuentas"></div>
         <div class="resultado" id="resultado">
-          <b id="res-titulo">Cuenta lista. Copia la clave ahora: no se vuelve a mostrar.</b>
+          <b id="res-titulo">Cuenta lista.</b>
           <pre id="invitacion"></pre>
           <button class="mini" id="copiar">Copiar mensaje de invitación</button>
         </div>
@@ -119,17 +119,24 @@
         <td class="ocultable">${fecha(u.creado)}<small>${u.ultimoIngreso ? "último ingreso: " + fecha(u.ultimoIngreso) : "sin ingresos"}</small></td>
         <td><span class="etq ${u.activo ? "" : "gris"}">${u.activo ? "activa" : "desactivada"}</span></td>
         <td><div class="acc">
-          <button class="mini" data-clave="${esc(u.id)}">Nueva clave</button>
+          <button class="mini" data-clave="${esc(u.id)}">Enviar enlace de contraseña</button>
           <button class="mini" data-activa="${esc(u.id)}" data-valor="${u.activo ? "0" : "1"}">${u.activo ? "Desactivar" : "Activar"}</button>
           <button class="mini rojo" data-borrar-cuenta="${esc(u.id)}">Eliminar</button>
         </div></td></tr>`).join("");
     }
-    function mostrarInvitacion(correo, nombre, clave, r = {}) {
+    function mostrarInvitacion(correo, nombre, _x, r = {}) {
+      const nueva = r.tipo === "restablecer";
       $("res-titulo").textContent = r.correoEnviado
-        ? `✓ Invitación enviada por correo a ${correo}. Igual te dejamos la clave por si la necesitas:`
-        : (r.motivo ? `No se pudo enviar el correo (${r.motivo}). Copia la clave y envíasela tú: no se vuelve a mostrar.` : "Cuenta lista. Copia la clave ahora: no se vuelve a mostrar.");
-      const url = new URL("ingresar.html", location.href).href;
-      $("invitacion").textContent = `Hola${nombre ? " " + nombre.split(" ")[0] : ""}, te creamos tu cuenta en Gotyx:\n\nIngresa en: ${url}\nCorreo: ${correo}\nClave: ${clave}\n\nCualquier duda, responde este correo.`;
+        ? `✓ Enviamos a ${correo} el enlace para ${nueva ? "crear una nueva" : "crear su"} contraseña. Si no le llega, mándale este mensaje:`
+        : (r.motivo ? `No se pudo enviar el correo (${r.motivo}). Mándale tú este mensaje:` : "Cuenta lista. Mándale este mensaje con el enlace para crear su contraseña:");
+      $("invitacion").textContent = `Hola${nombre ? " " + nombre.split(" ")[0] : ""}, ${nueva ? "aquí tienes el enlace para crear una nueva contraseña en Gotyx" : "te creamos tu cuenta en Gotyx. Crea tu contraseña aquí"}:
+
+${r.enlace}
+
+Tu usuario es: ${correo}
+El enlace vale por ${nueva ? "3" : "7"} días y sirve una sola vez.
+
+Cualquier duda, responde este correo.`;
       $("resultado").classList.add("on");
       $("resultado").scrollIntoView({ behavior: "smooth", block: "center" });
     }
@@ -172,7 +179,7 @@
         } else if (b.dataset.estado) {
           await api("/admin/demos/estado", "POST", { id: b.dataset.estado, estado: b.dataset.valor }); await cargarDemos();
         } else if (b.dataset.clave) {
-          if (!confirm(`¿Generar una clave nueva para ${b.dataset.clave}? La anterior deja de funcionar.`)) return;
+          if (!confirm(`¿Enviar a ${b.dataset.clave} un enlace para crear una nueva contraseña? La actual sigue funcionando hasta que la cambie.`)) return;
           const r = await api("/admin/usuarios/clave", "POST", { correo: b.dataset.clave, enviar: $("enviar").checked, url: new URL("ingresar.html", location.href).href });
           mostrarInvitacion(r.correo, "", r.clave, r);
         } else if (b.dataset.borrarDemo) {

@@ -268,3 +268,14 @@ section { position: relative; }
 .lista-faq summary::after { content: "+"; color: var(--agua); font: 600 22px var(--mono); line-height: 1; transition: transform 0.3s; }
 .lista-faq details[open] summary::after { transform: rotate(45deg); }
 .lista-faq p { margin: 0 0 22px; color: var(--suave); max-width: 760px; }
+
+/* crear contraseña */
+.acceso .estado.ok { color: #7ee2b8; }
+.acceso .pista { color: var(--tenue); font-size: 13px; margin: -4px 0 20px; }
+.acceso .fuerza { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; margin: -6px 0 14px; }
+.acceso .fuerza i { height: 4px; border-radius: 4px; background: var(--linea); transition: background 0.25s; }
+.acceso .fuerza i.n1 { background: #ff8a6a; }
+.acceso .fuerza i.n2 { background: #ffc35c; }
+.acceso .fuerza i.n3 { background: #7fd3ff; }
+.acceso .fuerza i.n4 { background: #5ce0a8; }
+.acceso input[readonly] { opacity: 0.7; }

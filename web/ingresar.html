@@ -7,6 +7,7 @@
   <meta name="robots" content="noindex, follow" />
   <meta name="description" content="Acceso de clientes a Gotyx, simulación hidrológica para terrenos en Chile." />
   <meta name="theme-color" content="#050e16" />
+  <meta name="referrer" content="no-referrer" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M16 2.5S6 13.6 6 20a10 10 0 0 0 20 0C26 13.6 16 2.5 16 2.5Z' fill='%235cc8ff'/%3E%3C/svg%3E" />
   <link rel="apple-touch-icon" href="assets/logo.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -29,14 +30,14 @@
       </div>
     </div>
     <div class="lado">
-      <div class="caja">
+      <div class="caja" id="v-acceso">
         <div class="etiqueta">Acceso clientes</div>
         <h1>Ingresa a Gotyx</h1>
-        <p>Usa el correo y la clave que te enviamos después de tu demo.</p>
+        <p>Usa tu correo y la contraseña que creaste.</p>
         <form id="form-acceso" novalidate>
           <div class="campo"><label for="a-correo">Correo</label><input id="a-correo" type="email" autocomplete="username" required /></div>
-          <div class="campo"><label for="a-clave">Clave</label><input id="a-clave" type="password" autocomplete="current-password" required /></div>
-          <div class="fila"><span></span><a href="./#demo">¿Olvidaste tu clave?</a></div>
+          <div class="campo"><label for="a-clave">Contraseña</label><input id="a-clave" type="password" autocomplete="current-password" required /></div>
+          <div class="fila"><span></span><a href="#" id="ir-recuperar">¿Olvidaste tu contraseña?</a></div>
           <button class="boton primario" type="submit">Ingresar<svg><use href="#flecha" /></svg></button>
           <div class="estado" id="estado-acceso" role="status"></div>
         </form>
@@ -44,29 +45,114 @@
         <a class="boton fantasma" href="./#demo">Agenda una demo guiada</a>
         <p style="text-align:center;margin-top:18px;font-size:14px;color:var(--suave)">o <a href="app/?demo=macul" style="color:var(--agua);font-weight:700;text-decoration:none">explora la demo abierta</a></p>
       </div>
+
+      <div class="caja" id="v-definir" hidden>
+        <div class="etiqueta" id="d-etiqueta">Bienvenido a Gotyx</div>
+        <h1 id="d-titulo">Crea tu contraseña</h1>
+        <p id="d-texto">Validando tu enlace…</p>
+        <form id="form-definir" novalidate hidden>
+          <div class="campo"><label for="d-correo">Usuario</label><input id="d-correo" type="email" autocomplete="username" readonly /></div>
+          <div class="campo"><label for="d-clave">Nueva contraseña</label><input id="d-clave" type="password" autocomplete="new-password" minlength="8" required /></div>
+          <div class="fuerza" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+          <div class="campo"><label for="d-clave2">Repítela</label><input id="d-clave2" type="password" autocomplete="new-password" required /></div>
+          <p class="pista">Mínimo 8 caracteres. Mejor si mezclas letras, números y algún símbolo.</p>
+          <button class="boton primario" type="submit">Guardar y entrar<svg><use href="#flecha" /></svg></button>
+          <div class="estado" id="estado-definir" role="status"></div>
+        </form>
+        <p id="d-volver" hidden style="margin-top:18px"><a href="ingresar.html" style="color:var(--agua);font-weight:700;text-decoration:none">← Volver a ingresar</a></p>
+      </div>
+
+      <div class="caja" id="v-recuperar" hidden>
+        <div class="etiqueta">Recuperar acceso</div>
+        <h1>¿Olvidaste tu contraseña?</h1>
+        <p>Escribe el correo de tu cuenta y te enviaremos un enlace para crear una nueva.</p>
+        <form id="form-recuperar" novalidate>
+          <div class="campo"><label for="r-correo">Correo</label><input id="r-correo" type="email" autocomplete="username" required /></div>
+          <button class="boton primario" type="submit">Enviar enlace<svg><use href="#flecha" /></svg></button>
+          <div class="estado" id="estado-recuperar" role="status"></div>
+        </form>
+        <p style="margin-top:18px"><a href="#" id="ir-acceso" style="color:var(--agua);font-weight:700;text-decoration:none">← Volver a ingresar</a></p>
+      </div>
     </div>
   </main>
   <script>
     const API = (window.GOTA_API || "").replace(/\/$/, "");
-    const f = document.getElementById("form-acceso"), est = document.getElementById("estado-acceso");
-    // si ya hay una sesión válida, directo a la app
-    (async () => {
-      let t = null; try { t = localStorage.getItem("gotyx-sesion"); } catch {}
-      if (!t) return;
-      try { const r = await fetch(`${API}/auth/yo`, { headers: { Authorization: `Bearer ${t}` } }); if (r.ok) location.replace("app/"); } catch {}
-    })();
-    f.addEventListener("submit", async (e) => {
-      e.preventDefault(); est.textContent = "";
-      const correo = document.getElementById("a-correo").value.trim(), clave = document.getElementById("a-clave").value;
-      if (!correo || !clave) { est.textContent = "Escribe tu correo y tu clave."; return; }
-      const b = f.querySelector("button"); b.disabled = true;
+    const $ = (id) => document.getElementById(id);
+    const vista = (v) => { for (const x of ["acceso", "definir", "recuperar"]) $("v-" + x).hidden = x !== v; };
+    const guardar = (t) => { try { localStorage.setItem("gotyx-sesion", t); } catch {} };
+    const errorRed = (err) => (err.message && !/fetch|network/i.test(err.message) ? err.message : "No pudimos conectar. Intenta de nuevo.");
+    async function post(ruta, cuerpo) {
+      const r = await fetch(`${API}${ruta}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(cuerpo) });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.error || "Algo falló. Intenta de nuevo.");
+      return d;
+    }
+
+    // ---- enlace para crear la contraseña (?k=...) ----
+    const K = new URLSearchParams(location.search).get("k");
+    if (K) {
+      history.replaceState(null, "", location.pathname); // el token no queda en la barra ni en el historial
+      vista("definir");
+      post("/auth/enlace", { k: K }).then((d) => {
+        if (d.tipo !== "invitacion") { $("d-etiqueta").textContent = "Recuperar acceso"; $("d-titulo").textContent = "Crea una nueva contraseña"; }
+        $("d-texto").textContent = d.nombre ? `Hola ${d.nombre.split(" ")[0]}, elige la contraseña con la que vas a entrar a Gotyx.` : "Elige la contraseña con la que vas a entrar a Gotyx.";
+        $("d-correo").value = d.correo;
+        $("form-definir").hidden = false;
+        $("d-clave").focus();
+      }).catch((err) => { $("d-texto").textContent = errorRed(err); $("d-volver").hidden = false; });
+    } else {
+      // si ya hay una sesión válida, directo a la app
+      (async () => {
+        let t = null; try { t = localStorage.getItem("gotyx-sesion"); } catch {}
+        if (!t) return;
+        try { const r = await fetch(`${API}/auth/yo`, { headers: { Authorization: `Bearer ${t}` } }); if (r.ok) location.replace("app/"); } catch {}
+      })();
+    }
+
+    // medidor simple de fuerza
+    const fuerza = (c) => (c.length >= 8) + (c.length >= 12) + (/[a-z]/.test(c) && /[A-Z]/.test(c)) + (/\d/.test(c) && /[^A-Za-z0-9]/.test(c));
+    $("d-clave").addEventListener("input", (e) => {
+      const n = e.target.value ? Math.max(1, fuerza(e.target.value)) : 0;
+      document.querySelectorAll(".fuerza i").forEach((i, k) => (i.className = k < n ? `n${n}` : ""));
+    });
+    $("form-definir").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const est = $("estado-definir"); est.textContent = "";
+      const c1 = $("d-clave").value, c2 = $("d-clave2").value;
+      if (c1.length < 8) { est.textContent = "La contraseña debe tener al menos 8 caracteres."; return; }
+      if (c1 !== c2) { est.textContent = "Las contraseñas no coinciden."; return; }
+      const b = e.target.querySelector("button"); b.disabled = true;
+      try { const d = await post("/auth/definir", { k: K, clave: c1 }); guardar(d.token); location.href = "app/"; }
+      catch (err) { est.textContent = errorRed(err); }
+      finally { b.disabled = false; }
+    });
+
+    // ---- ingresar ----
+    $("form-acceso").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const est = $("estado-acceso"); est.textContent = "";
+      const correo = $("a-correo").value.trim(), clave = $("a-clave").value;
+      if (!correo || !clave) { est.textContent = "Escribe tu correo y tu contraseña."; return; }
+      const b = e.target.querySelector("button"); b.disabled = true;
+      try { const d = await post("/auth/login", { correo, clave }); guardar(d.token); location.href = "app/"; }
+      catch (err) { est.textContent = errorRed(err); }
+      finally { b.disabled = false; }
+    });
+
+    // ---- recuperar ----
+    $("ir-recuperar").onclick = (e) => { e.preventDefault(); $("r-correo").value = $("a-correo").value.trim(); vista("recuperar"); $("r-correo").focus(); };
+    $("ir-acceso").onclick = (e) => { e.preventDefault(); vista("acceso"); };
+    $("form-recuperar").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const est = $("estado-recuperar"); est.textContent = ""; est.classList.remove("ok");
+      const correo = $("r-correo").value.trim();
+      if (!correo) { est.textContent = "Escribe tu correo."; return; }
+      const b = e.target.querySelector("button"); b.disabled = true;
       try {
-        const r = await fetch(`${API}/auth/login`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ correo, clave }) });
-        const d = await r.json().catch(() => ({}));
-        if (!r.ok) throw new Error(d.error || "El acceso de clientes aún no está habilitado. Agenda una demo y te creamos tu cuenta.");
-        try { localStorage.setItem("gotyx-sesion", d.token); } catch {}
-        location.href = "app/";
-      } catch (err) { est.textContent = err.message && !/fetch|network/i.test(err.message) ? err.message : "No pudimos conectar. Intenta de nuevo."; }
+        await post("/auth/recuperar", { correo });
+        est.classList.add("ok");
+        est.textContent = "Listo. Si ese correo tiene una cuenta, te llegará un enlace en unos minutos (revisa también spam).";
+      } catch (err) { est.textContent = errorRed(err); }
       finally { b.disabled = false; }
     });
   </script>
