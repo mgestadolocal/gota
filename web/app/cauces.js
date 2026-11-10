@@ -20,11 +20,13 @@ function chaikin(p, vueltas = 2) {
 }
 
 // valor: Float32Array con el valor a mostrar por celda (área aportante en m² o caudal en m³/s)
-export function redCauces(g, an, umbral, valor) {
+// agua: Float32Array de profundidad (m); las celdas con agua quieta (pozas, lagunas) no son cauce:
+// ahí el flujo D8 sobre la superficie plana dibuja líneas rectas y paralelas sin sentido físico.
+export function redCauces(g, an, umbral, valor, agua = null) {
   const { w, h } = g, { acc, dir, mask } = an;
   const n = w * h;
   const enRed = new Uint8Array(n), entradas = new Uint8Array(n);
-  for (let i = 0; i < n; i++) if (acc[i] >= umbral && dir[i] >= 0) enRed[i] = 1;
+  for (let i = 0; i < n; i++) if (acc[i] >= umbral && dir[i] >= 0 && !(agua && agua[i] >= 0.01)) enRed[i] = 1;
   const abajo = (i) => { const k = dir[i]; if (k < 0) return -1; const r = (i / w) | 0, c = i - r * w, rr = r + VY[k], cc = c + VX[k]; return rr < 0 || cc < 0 || rr >= h || cc >= w ? -1 : rr * w + cc; };
   for (let i = 0; i < n; i++) if (enRed[i]) { const j = abajo(i); if (j >= 0 && enRed[j]) entradas[j]++; }
 

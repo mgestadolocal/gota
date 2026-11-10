@@ -379,7 +379,8 @@ function actualizarCauces(mostrar) {
   if (!mostrar || !E.an) { src.setData(vacio); return; }
   const T = E.an.tormenta;
   const valor = T ? T.qp : E.an.acc;
-  const fc = redCauces(E.g, E.an, umbral(), valor);
+  // depresiones rellenadas (incluye llanos y lagunas): ahí el flujo D8 no es un cauce real
+  const fc = redCauces(E.g, E.an, umbral(), valor, E.an.prof);
   // normalización logarítmica a 0..1 para grosor y color
   let vmin = Infinity, vmax = 0;
   for (const f of fc.features) { const v = f.properties.v; if (v > 0) { vmin = Math.min(vmin, v); vmax = Math.max(vmax, v); } }
@@ -578,6 +579,15 @@ const caudalTxt = (q) => (q >= 1 ? `${fmt(q, 1)} m³/s` : `${fmt(q * 1000)} L/s`
 
 function mostrarTormenta() {
   const t = E.an.tormenta, s = t.stats;
+  // el caudal máximo (tarjeta y etiqueta) se toma en el punto de mayor caudal de un cauce visible (fuera de lagunas y llanos rellenados)
+  let iVis = -1, qVis = 0;
+  for (let i = 0; i < t.qp.length; i++) {
+    if (!E.an.mask[i] || E.an.prof[i] >= 0.01 || !(t.qp[i] > qVis)) continue;
+    qVis = t.qp[i]; iVis = i;
+  }
+  if (iVis < 0) { iVis = s.iMax; qVis = s.qMax; }
+  t.qVis = qVis;
+
   const pct = (v) => `${fmt((100 * v) / s.llueve)} %`;
   $("res-tormenta").innerHTML =
     `<p class="explica">Con una lluvia de <b>${t.T} años</b> (${fmt(t.P24)} mm en 24 h) sobre tu terreno:</p>` +
@@ -587,12 +597,12 @@ function mostrarTormenta() {
     tarjeta(s.aCharcos ? m3(s.enCharcos) : "—", s.aCharcos ? `queda en pozas (${ha(s.aCharcos)})` : "no se forman pozas") +
     tarjeta(m3(s.sale), "sale del terreno") +
     tarjeta(m3(s.entra), "entra desde terrenos vecinos") +
-    tarjeta(caudalTxt(s.qMax), "caudal máximo en el cauce principal (en el peak de la tormenta)", "ancha agua") +
+    tarjeta(caudalTxt(qVis), "caudal máximo en el cauce principal (en el peak de la tormenta)", "ancha agua") +
     `<p class="explica">Cobertura del suelo de ESA WorldCover y suelo tipo ${t.suelo} (número de curva medio ${fmt(s.cnMedio)}). Lluvias de GPEX, base satelital de ~10 km${E.lluvias.distanciaKm > 3 ? ` (celda a ${fmt(E.lluvias.distanciaKm)} km)` : ""}: es una estimación, no reemplaza un estudio hidrológico.</p>`;
   $("res-tormenta").hidden = false;
-  if (s.iMax >= 0) {
-    const r = (s.iMax / E.g.w) | 0, c = s.iMax - r * E.g.w;
-    etiquetaQ.textContent = `Caudal máx. ${caudalTxt(s.qMax)}`;
+  if (iVis >= 0) {
+    const r = (iVis / E.g.w) | 0, c = iVis - r * E.g.w;
+    etiquetaQ.textContent = `Caudal máx. ${caudalTxt(qVis)}`;
     marcaQ.setLngLat(afin(E.g)(c + 0.5, r + 0.5)).addTo(mapa);
   }
 }
@@ -648,7 +658,7 @@ function informeTormenta(fila) {
   const t = E.an.tormenta;
   if (!t) return "";
   const s = t.stats;
-  return `<h2>Tormenta de ${t.T} años</h2><table>${fila("Lluvia en 24 h", `${fmt(t.P24, 1)} mm`)}${fila("Agua que cae sobre el terreno", m3(s.llueve))}${fila("Escurre por la superficie", m3(s.genera))}${fila("Se infiltra", m3(s.infiltra))}${fila("Queda en pozas", s.aCharcos ? `${m3(s.enCharcos)} en ${ha(s.aCharcos)}` : "no se forman")}${fila("Sale del terreno", m3(s.sale))}${fila("Entra desde terrenos vecinos", m3(s.entra))}${fila("Caudal máximo en el cauce principal", caudalTxt(s.qMax))}${fila("Suelo / número de curva medio", `tipo ${t.suelo} / ${fmt(s.cnMedio)}`)}</table><p class="nota">Lluvias: GPEX (Gründemann et al. 2021, CC BY 4.0), base satelital MSWEP de 0,1°. Escorrentía: número de curva SCS con cobertura ESA WorldCover 2021 (CC BY 4.0). Caudal: método racional con tiempo de concentración de California; las duraciones menores a 3 h se extrapolan.</p>`;
+  return `<h2>Tormenta de ${t.T} años</h2><table>${fila("Lluvia en 24 h", `${fmt(t.P24, 1)} mm`)}${fila("Agua que cae sobre el terreno", m3(s.llueve))}${fila("Escurre por la superficie", m3(s.genera))}${fila("Se infiltra", m3(s.infiltra))}${fila("Queda en pozas", s.aCharcos ? `${m3(s.enCharcos)} en ${ha(s.aCharcos)}` : "no se forman")}${fila("Sale del terreno", m3(s.sale))}${fila("Entra desde terrenos vecinos", m3(s.entra))}${fila("Caudal máximo en el cauce principal", caudalTxt(t.qVis ?? s.qMax))}${fila("Suelo / número de curva medio", `tipo ${t.suelo} / ${fmt(s.cnMedio)}`)}</table><p class="nota">Lluvias: GPEX (Gründemann et al. 2021, CC BY 4.0), base satelital MSWEP de 0,1°. Escorrentía: número de curva SCS con cobertura ESA WorldCover 2021 (CC BY 4.0). Caudal: método racional con tiempo de concentración de California; las duraciones menores a 3 h se extrapolan.</p>`;
 }
 
 // captura del mapa: se toma dentro del evento "render", cuando el cuadro aún está en el búfer
