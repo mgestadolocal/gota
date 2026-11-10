@@ -79,7 +79,8 @@ export function pintar(capa, g, a, opciones = {}) {
 
   for (let i = 0; i < w * h; i++) {
     if (Number.isNaN(z[i])) continue;
-    const k = mask[i] ? 1 : FUERA;
+    const k = a.borde ? a.borde[i] : (mask[i] ? 1 : FUERA);
+    if (k <= 0.004) continue;
     let col = null, al = 0;
     if (capa === "elevacion") {
       const base = rampa(HIPSO, (z[i] - st.zmin) / rango);
@@ -91,8 +92,7 @@ export function pintar(capa, g, a, opciones = {}) {
       while (a.pendiente[i] >= CLASES_PEND[j].hasta) j++;
       col = PEND_RGB[j]; al = 0.78;
     } else if (capa === "encharcamiento") {
-      const d = T ? T.profT[i] : a.prof[i];
-      if (d >= 0.05) { col = rampa(AGUA, Math.min(1, d / 1.5)); al = 0.55 + 0.4 * Math.min(1, d / 0.8); }
+      // el agua se dibuja como láminas vectoriales (agua.js)
     } else if (capa === "escurrimiento") {
       const v = a.acc[i];
       // sobre agua quieta (pozas o lagunas) no hay cauce: se pinta como lámina de agua
@@ -158,6 +158,9 @@ export function curvas(g, mask, eq) {
 // ---------- leyendas ----------
 const fmt = (v, d = 0) => v.toLocaleString("es-CL", { maximumFractionDigits: d, minimumFractionDigits: d });
 
+const ESCALA_AGUA = `<div class="ley-agua">${[["#8fd3ff", "5–30 cm"], ["#4aa8ff", "30–80 cm"], ["#1f78d1", "0,8–1,5 m"], ["#0b4fa3", "> 1,5 m"]]
+  .map(([c, t]) => `<span><i style="background:${c}"></i>${t}</span>`).join("")}</div>`;
+
 export function leyenda(capa, a, opciones = {}) {
   const st = a.stats;
   const barra = (cols, izq, der) =>
@@ -166,7 +169,14 @@ export function leyenda(capa, a, opciones = {}) {
   if (capa === "pendiente")
     return `<b>Pendiente</b>` + CLASES_PEND.map((c, i) => `<div class="ley-fila"><i style="background:${c.color}"></i>${c.txt}<span>${fmt(100 * st.clases[i])} %</span></div>`).join("");
   const T = a.tormenta;
-  if (capa === "encharcamiento" && T) return `<b>Dónde se junta el agua · lluvia de ${opciones.retorno} años</b>${barra(["#bfe6ff", "#4aa8ff", "#0b3d91"], "5 cm", "≥ 1,5 m")}<p class="ley-nota">Pozas que se forman con esta tormenta. Algunas depresiones no alcanzan a llenarse.</p>`;
+  if (capa === "encharcamiento" && T) {
+    const s = T.stats, ha = s.aCharcos / 1e4;
+    const pct = (100 * s.aCharcos) / Math.max(1, st.area);
+    const resumen = ha < 0.5 || pct < 0.3
+      ? `<p class="ley-nota"><b>Buen drenaje:</b> con esta tormenta casi no se acumula agua (${fmt(ha, ha < 10 ? 1 : 0)} ha, ${fmt(pct, 2)} % del terreno, en depresiones muy pequeñas). El agua escurre: revisa la capa <i>Escurrimiento</i>.</p>`
+      : `<p class="ley-nota">Con esta tormenta se acumulan <b>${fmt(s.enCharcos)} m³</b> en <b>${fmt(ha, ha < 10 ? 1 : 0)} ha</b>. Las depresiones muy pequeñas (ruido del modelo satelital) no se muestran.</p>`;
+    return `<b>Dónde se junta el agua · lluvia de ${opciones.retorno} años</b>${ESCALA_AGUA}${resumen}`;
+  }
   if (capa === "escurrimiento" && T) return `<b>Caudal máximo · lluvia de ${opciones.retorno} años</b>${barra(["#8fd0ff", "#4aa8ff", "#0b3d91"], "0,005 m³/s", fmt(Math.max(0.05, T.stats.qMax), 2) + " m³/s")}<p class="ley-nota">Cuánta agua pasa por cada cauce en el peak de la tormenta (1 m³/s = 1.000 litros por segundo).</p>`;
   if (capa === "cobertura" && a.clase) {
     const n = {}; let tot = 0;
@@ -174,7 +184,7 @@ export function leyenda(capa, a, opciones = {}) {
     return `<b>Cobertura del suelo (ESA WorldCover 2021)</b>` + Object.entries(n).sort((x, y) => y[1] - x[1])
       .map(([k, v]) => `<div class="ley-fila"><i style="background:${CLASES_WC[k].color}"></i>${CLASES_WC[k].nombre}<span>${fmt((100 * v) / tot)} %</span></div>`).join("");
   }
-  if (capa === "encharcamiento") return `<b>Encharcamiento (profundidad)</b>${barra(["#bfe6ff", "#4aa8ff", "#0b3d91"], "5 cm", "≥ 1,5 m")}<p class="ley-nota">Depresiones sin salida, llenas hasta el borde (lluvia sin límite). Simula una tormenta para ver cuánto se llenan de verdad.</p>`;
+  if (capa === "encharcamiento") return `<b>Encharcamiento (profundidad)</b>${ESCALA_AGUA}<p class="ley-nota">Depresiones sin salida, llenas hasta el borde (lluvia sin límite). Simula una tormenta para ver cuánto se llenan de verdad.</p>`;
   if (capa === "escurrimiento") return `<b>Escurrimiento (área aportante)</b>${barra(["#8fd0ff", "#4aa8ff", "#0b3d91"], fmt((opciones.umbralCauce || 5000) / 10000, 1) + " ha", fmt(st.accMax / 10000, 0) + " ha")}<p class="ley-nota">Por dónde corre el agua. Más oscuro = más superficie drena por ahí.</p>`;
   return "";
 }

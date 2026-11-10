@@ -2,6 +2,10 @@
 import { geotiffFloat32 } from "./geotiff_escribir.js";
 import { crearCapaLluvia } from "./lluvia_gl.js";
 import { redCauces } from "./cauces.js";
+import { registrarProtocolo, publicarCapa } from "./capa_teselas.js";
+import { laminasDeAgua } from "./agua.js";
+
+registrarProtocolo();
 import { cargarCopernicus, cargarArchivo, mascara, esquinas, afin, areaAnillo } from "./dem.js";
 import { pintar, sombreado, curvas, equidistancia, leyenda, CLASES_PEND } from "./render.js";
 import { cargarCobertura } from "./cobertura.js";
@@ -55,8 +59,8 @@ const mapa = new maplibregl.Map({
         attribution: "Imágenes © Esri, Maxar, Earthstar Geographics",
       },
       dem: {
-        // tileSize 512 con teselas de 256: la malla del relieve usa la mitad de teselas por lado (4x menos), mucho más fluido
-        type: "raster-dem", encoding: "terrarium", tileSize: 512, maxzoom: 14,
+        // ojo: tileSize 512 recorta las capas de imagen (pendiente, cobertura…) sobre el relieve 3D; se mantiene 256
+        type: "raster-dem", encoding: "terrarium", tileSize: 256, maxzoom: 15,
         tiles: ["https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png"],
       },
     },
@@ -80,8 +84,14 @@ mapa.on("load", () => {
   mapa.addSource("curvas", { type: "geojson", data: vacio });
   mapa.addSource("poligono", { type: "geojson", data: vacio });
   mapa.addSource("cauces", { type: "geojson", data: vacio, tolerance: 0.2 });
+  mapa.addSource("agua", { type: "geojson", data: vacio, tolerance: 0.15 });
   mapa.addLayer({ id: "curvas", type: "line", source: "curvas",
     paint: { "line-color": "#ffffff", "line-opacity": ["case", ["get", "maestra"], 0.75, 0.38], "line-width": ["case", ["get", "maestra"], 1.4, 0.7] } });
+  // agua acumulada: láminas vectoriales por profundidad (agua.js)
+  mapa.addLayer({ id: "agua", type: "fill", source: "agua",
+    paint: { "fill-color": ["match", ["get", "nivel"], 0, "#8fd3ff", 1, "#4aa8ff", 2, "#1f78d1", "#0b4fa3"], "fill-opacity": 0.82, "fill-antialias": true } }, "curvas");
+  mapa.addLayer({ id: "agua-borde", type: "line", source: "agua", filter: ["==", ["get", "nivel"], 0],
+    paint: { "line-color": "#e6f7ff", "line-width": ["interpolate", ["linear"], ["zoom"], 11, 0.4, 15, 1.4], "line-opacity": 0.7 } }, "curvas");
   // cauces: brillo ancho + núcleo; grosor y color según el caudal (o área aportante) normalizado "t" (0..1)
   const ancho = (k) => ["interpolate", ["linear"], ["zoom"], 10, ["*", k * 0.6, ["+", 0.6, ["*", 2.6, ["get", "t"]]]], 15, ["*", k * 2.2, ["+", 0.6, ["*", 2.6, ["get", "t"]]]]];
   mapa.addLayer({ id: "cauces-brillo", type: "line", source: "cauces", layout: { "line-cap": "round", "line-join": "round" },
@@ -232,7 +242,7 @@ $("b-analizar").onclick = async () => {
     estado(`Calculando escurrimiento y pendientes (${fmt(g.w * g.h)} celdas)…`);
     const r = await pedir({ tipo: "analizar", w: g.w, h: g.h, z: g.z.slice(), mask: mask.slice(), dx: g.dx, dy: g.dy });
     E.g = g;
-    E.an = { ...r, mask, sombra: sombreado(g) };
+    E.an = { ...r, mask, sombra: sombreado(g), borde: difuminado(mask, g.w, g.h) };
     estado("");
     if (!E.anillo) {
       const c = esquinas(g);
@@ -258,6 +268,7 @@ function limpiarResultados() {
   if (mapa.getLayer("capa")) mapa.setLayoutProperty("capa", "visibility", "none");
   mapa.getSource("curvas")?.setData(vacio);
   mapa.getSource("cauces")?.setData(vacio);
+  mapa.getSource("agua")?.setData(vacio);
   if ($("t-3d").checked) { $("t-3d").checked = false; alternar3D(false); }
 }
 
@@ -310,16 +321,55 @@ function pintarCapa() {
   }
   const op = { umbralCauce: umbral(), retorno: E.T };
   actualizarCauces(capa === "escurrimiento");
-  const url = pintar(capa, E.g, E.an, op).toDataURL("image/png");
-  const coordinates = esquinas(E.g);
-  const src = mapa.getSource("capa");
-  if (src) src.updateImage({ url, coordinates });
-  else {
-    mapa.addSource("capa", { type: "image", url, coordinates });
-    mapa.addLayer({ id: "capa", type: "raster", source: "capa", paint: { "raster-fade-duration": 0, "raster-resampling": "linear" } }, "cauces-brillo");
+  const agua = capa === "escurrimiento" || capa === "encharcamiento";
+  actualizarAgua(agua, capa === "encharcamiento");
+  if (agua) {
+    if (mapa.getLayer("capa")) mapa.setLayoutProperty("capa", "visibility", "none");
+  } else {
+    publicarCapa(mapa, pintar(capa, E.g, E.an, op), E.g, "agua");
+    mapa.setLayoutProperty("capa", "visibility", "visible");
   }
-  mapa.setLayoutProperty("capa", "visibility", "visible");
   $("leyenda").innerHTML = leyenda(capa, E.an, op);
+}
+
+// agua acumulada: con tormenta, las pozas que se forman; sin tormenta, las depresiones llenas
+function actualizarAgua(mostrar, porProfundidad) {
+  const src = mapa.getSource("agua");
+  if (!src) return;
+  if (!mostrar || !E.an) { src.setData(vacio); return; }
+  const prof = E.an.tormenta ? E.an.tormenta.profT : E.an.prof;
+  src.setData(laminasDeAgua(E.g, prof, E.an.mask));
+  // en "escurrimiento" el agua quieta va en un solo tono suave, para no competir con los cauces
+  mapa.setPaintProperty("agua", "fill-color", porProfundidad
+    ? ["match", ["get", "nivel"], 0, "#8fd3ff", 1, "#4aa8ff", 2, "#1f78d1", "#0b4fa3"] : "#6cc4ff");
+  mapa.setPaintProperty("agua", "fill-opacity", porProfundidad ? 0.82 : 0.6);
+}
+
+// difuminado del borde: 1 dentro del polígono, y fuera baja suavemente a 0 (sin cortes duros)
+function difuminado(mask, w, h) {
+  const n = w * h, INF = 1e9, d = new Float32Array(n);
+  for (let i = 0; i < n; i++) d[i] = mask[i] ? 0 : INF;
+  const D = 1, DD = Math.SQRT2;
+  for (let r = 0; r < h; r++) for (let c = 0; c < w; c++) {
+    const i = r * w + c; let v = d[i];
+    if (c > 0) v = Math.min(v, d[i - 1] + D);
+    if (r > 0) { v = Math.min(v, d[i - w] + D); if (c > 0) v = Math.min(v, d[i - w - 1] + DD); if (c < w - 1) v = Math.min(v, d[i - w + 1] + DD); }
+    d[i] = v;
+  }
+  for (let r = h - 1; r >= 0; r--) for (let c = w - 1; c >= 0; c--) {
+    const i = r * w + c; let v = d[i];
+    if (c < w - 1) v = Math.min(v, d[i + 1] + D);
+    if (r < h - 1) { v = Math.min(v, d[i + w] + D); if (c < w - 1) v = Math.min(v, d[i + w + 1] + DD); if (c > 0) v = Math.min(v, d[i + w - 1] + DD); }
+    d[i] = v;
+  }
+  const F = Math.max(6, Math.min(30, Math.round(Math.min(w, h) * 0.06)));
+  const k = new Float32Array(n);
+  for (let i = 0; i < n; i++) {
+    if (d[i] === 0) { k[i] = 1; continue; }
+    const t = Math.min(1, d[i] / F);
+    k[i] = 0.55 * (1 - t) * (1 - t) * (1 + 2 * t); // suave (curva de Hermite) desde 0,55 en el borde
+  }
+  return k;
 }
 
 // red de cauces vectorial (escurrimiento): caudal de la tormenta si existe, si no área aportante
