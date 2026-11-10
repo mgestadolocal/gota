@@ -6,6 +6,7 @@
   body > *:not(#informe) { display: none !important; }
   #informe { display: block !important; color: #0d1b26; font: 9.6pt/1.5 Manrope, system-ui, sans-serif; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 }
+#informe { color: #0d1b26; font: 9.6pt/1.5 Manrope, system-ui, sans-serif; text-align: left; }
 #informe .hoja { width: 210mm; height: 297mm; padding: 14mm 15mm 18mm; position: relative; overflow: hidden; break-after: page; page-break-after: always; background: #fff; }
 #informe .hoja:last-child { break-after: auto; page-break-after: auto; }
 #informe b { font-weight: 700; }
