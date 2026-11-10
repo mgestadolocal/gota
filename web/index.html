@@ -99,7 +99,10 @@
 
   <!-- portada -->
   <section class="hero">
-    <video class="fondo" autoplay muted loop playsinline preload="auto" poster="assets/clips/hero.jpg" aria-label="Simulación 3D de lluvia escurriendo por la Quebrada de Macul"><source src="assets/clips/hero.mp4" type="video/mp4" /></video>
+    <video class="fondo" autoplay muted loop playsinline preload="auto" poster="assets/clips/hero.jpg" aria-label="Simulación 3D de lluvia escurriendo por la Quebrada de Macul">
+      <source src="assets/clips/hero-720.mp4" type="video/mp4" media="(max-width: 900px)" />
+      <source src="assets/clips/hero.mp4" type="video/mp4" />
+    </video>
     <svg class="topo" id="topo" viewBox="0 0 1600 900" preserveAspectRatio="xMidYMid slice" aria-hidden="true"></svg>
     <div class="hud" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
     <div class="lectura" aria-hidden="true"><span class="vivo"></span><b>SIMULACIÓN EN VIVO</b><br /><span id="lectura">LAT −33.5000 · LON −70.4970<br />T = 100 AÑOS · 134 mm / 24 h</span></div>
