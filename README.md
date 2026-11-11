@@ -1,4 +1,4 @@
-# Gota.ai — el agua y el terreno de Chile
+# Gotyx.ai — el agua y el terreno de Chile
 
 Dibuja un polígono (o sube un DEM de dron/LiDAR) y obtén, en el navegador:
 
