@@ -1,6 +1,7 @@
 // Pintado de capas (canvas → imagen sobre el mapa), curvas de nivel y leyendas.
 import { afin } from "./dem.js";
 import { CLASES_WC } from "./cobertura.js";
+import { nivelesTormenta, COLORES_AGUA } from "./agua.js";
 
 const FUERA = 0.28; // opacidad relativa fuera del polígono (contexto)
 
@@ -161,6 +162,13 @@ const fmt = (v, d = 0) => v.toLocaleString("es-CL", { maximumFractionDigits: d, 
 const ESCALA_AGUA = `<div class="ley-agua">${[["#8fd3ff", "5–30 cm"], ["#4aa8ff", "30–80 cm"], ["#1f78d1", "0,8–1,5 m"], ["#0b4fa3", "> 1,5 m"]]
   .map(([c, t]) => `<span><i style="background:${c}"></i>${t}</span>`).join("")}</div>`;
 
+// escala de profundidad con cortes fijos (los de la tormenta de 100 años del caso)
+const cm = (m) => (m < 1 ? `${fmt(Math.round(m * 100))} cm` : `${fmt(m, 1)} m`);
+function escalaTormenta(dRef) {
+  const v = nivelesTormenta(dRef);
+  return `<div class="ley-agua">${COLORES_AGUA.map((c, k) => `<span><i style="background:${c}"></i>${k < v.length - 1 ? `${cm(v[k])}–${cm(v[k + 1])}` : `> ${cm(v[k])}`}</span>`).join("")}</div>`;
+}
+
 export function leyenda(capa, a, opciones = {}) {
   const st = a.stats;
   const barra = (cols, izq, der) =>
@@ -175,7 +183,12 @@ export function leyenda(capa, a, opciones = {}) {
     const resumen = ha < 0.5 || pct < 0.3
       ? `<p class="ley-nota"><b>Buen drenaje:</b> con esta tormenta casi no se acumula agua (${fmt(ha, ha < 10 ? 1 : 0)} ha, ${fmt(pct, 2)} % del terreno, en depresiones muy pequeñas). El agua escurre: revisa la capa <i>Escurrimiento</i>.</p>`
       : `<p class="ley-nota">Con esta tormenta se acumulan <b>${fmt(s.enCharcos)} m³</b> en <b>${fmt(ha, ha < 10 ? 1 : 0)} ha</b>. Las depresiones muy pequeñas (ruido del modelo satelital) no se muestran.</p>`;
-    return `<b>Dónde se junta el agua · lluvia de ${opciones.retorno} años</b>${ESCALA_AGUA}${resumen}`;
+    const ref = T.ref ? `<p class="ley-nota">Misma escala para todas las tormentas: más oscuro = más profundo.${T.T < 100 ? ` <span class="ley-max">- - -</span> hasta dónde llega con 100 años.` : ""}</p>` : "";
+    return `<b>Dónde se junta el agua · lluvia de ${opciones.retorno} años</b>${T.ref ? escalaTormenta(T.ref.dRef) : ESCALA_AGUA}${resumen}${ref}`;
+  }
+  if (capa === "escurrimiento" && T && T.ref) {
+    const q = (v) => (v >= 1 ? `${fmt(v, 1)} m³/s` : `${fmt(v * 1000)} L/s`);
+    return `<b>Caudal máximo · lluvia de ${opciones.retorno} años</b>${barra(["#a8e4ff", "#3aa0f0", "#0d5fc4"], q(T.ref.qRef / 63), q(T.ref.qRef))}<p class="ley-nota">Cuánta agua pasa por cada cauce en el peak de la tormenta. <b>Misma escala para todas las tormentas</b>: con una lluvia menor los cauces se ven más delgados y claros, y los más chicos desaparecen.</p>`;
   }
   if (capa === "escurrimiento" && T) return `<b>Caudal máximo · lluvia de ${opciones.retorno} años</b>${barra(["#8fd0ff", "#4aa8ff", "#0b3d91"], "0,005 m³/s", fmt(Math.max(0.05, T.stats.qMax), 2) + " m³/s")}<p class="ley-nota">Cuánta agua pasa por cada cauce en el peak de la tormenta (1 m³/s = 1.000 litros por segundo).</p>`;
   if (capa === "cobertura" && a.clase) {

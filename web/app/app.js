@@ -3,7 +3,7 @@ import { geotiffFloat32 } from "./geotiff_escribir.js";
 import { crearCapaLluvia } from "./lluvia_gl.js";
 import { redCauces } from "./cauces.js";
 import { registrarProtocolo, publicarCapa } from "./capa_teselas.js";
-import { laminasDeAgua } from "./agua.js";
+import { laminasDeAgua, nivelesTormenta, COLORES_AGUA } from "./agua.js";
 import { informeHTML } from "./informe.js";
 
 registrarProtocolo();
@@ -91,10 +91,13 @@ mapa.on("load", () => {
   // agua acumulada: láminas vectoriales por profundidad (agua.js)
   mapa.addLayer({ id: "agua", type: "fill", source: "agua",
     paint: { "fill-color": ["match", ["get", "nivel"], 0, "#8fd3ff", 1, "#4aa8ff", 2, "#1f78d1", "#0b4fa3"], "fill-opacity": 0.82, "fill-antialias": true } }, "curvas");
+  mapa.addSource("agua-max", { type: "geojson", data: vacio });
+  mapa.addLayer({ id: "agua-max", type: "line", source: "agua-max", filter: ["==", ["get", "nivel"], 0],
+    paint: { "line-color": "#ffd166", "line-width": ["interpolate", ["linear"], ["zoom"], 11, 0.8, 15, 2], "line-dasharray": [2, 1.5], "line-opacity": 0.9 } }, "curvas");
   mapa.addLayer({ id: "agua-borde", type: "line", source: "agua", filter: ["==", ["get", "nivel"], 0],
     paint: { "line-color": "#e6f7ff", "line-width": ["interpolate", ["linear"], ["zoom"], 11, 0.4, 15, 1.4], "line-opacity": 0.7 } }, "curvas");
   // cauces: brillo ancho + núcleo; grosor y color según el caudal (o área aportante) normalizado "t" (0..1)
-  const ancho = (k) => ["interpolate", ["linear"], ["zoom"], 10, ["*", k * 0.6, ["+", 0.6, ["*", 2.6, ["get", "t"]]]], 15, ["*", k * 2.2, ["+", 0.6, ["*", 2.6, ["get", "t"]]]]];
+  const ancho = (k) => ["interpolate", ["linear"], ["zoom"], 10, ["*", k * 0.6, ["+", 0.4, ["*", 3.8, ["^", ["get", "t"], 2]]]], 15, ["*", k * 2.2, ["+", 0.4, ["*", 3.8, ["^", ["get", "t"], 2]]]]];
   mapa.addLayer({ id: "cauces-brillo", type: "line", source: "cauces", layout: { "line-cap": "round", "line-join": "round" },
     paint: { "line-color": "#5cc8ff", "line-blur": 3, "line-width": ancho(2.6), "line-opacity": ["*", ["case", ["==", ["get", "dentro"], 1], 0.35, 0.12], ["+", 0.3, ["get", "t"]]] } }, "curvas");
   mapa.addLayer({ id: "cauces", type: "line", source: "cauces", layout: { "line-cap": "round", "line-join": "round" },
@@ -343,7 +346,13 @@ trabajador.onmessage = (e) => {
   if (!p) return;
   if (e.data.tipo === "error") p.no(new Error(e.data.mensaje)); else p.si(e.data);
 };
-const pedir = (msg, transfer = []) => new Promise((si, no) => { pendiente = { si, no }; trabajador.postMessage(msg, transfer); });
+// los pedidos van en cola (la serie de tormentas se calcula de fondo mientras el usuario usa la app)
+let cola = Promise.resolve();
+const pedir = (msg, transfer = []) => {
+  const p = cola.then(() => new Promise((si, no) => { pendiente = { si, no }; trabajador.postMessage(msg, transfer); }));
+  cola = p.catch(() => {});
+  return p;
+};
 
 // ---------- análisis ----------
 $("b-analizar").onclick = async () => {
@@ -351,7 +360,8 @@ $("b-analizar").onclick = async () => {
   detenerLluvia();
   try {
     estado("Preparando…");
-    const g = E.archivo ? await cargarArchivo(E.archivo, E.anillo, estado) : await cargarCopernicus(API, E.anillo, estado);
+    const g = E.archivo ? await cargarArchivo(E.archivo, E.anillo, estado)
+      : (E.paqueteDemo && (await E.paqueteDemo)?.g) || await cargarCopernicus(API, E.anillo, estado);
     const mask = mascara(g, E.anillo);
     if (!mask.some((v) => v)) throw new Error("No hay datos de elevación dentro del polígono.");
     estado(`Calculando escurrimiento y pendientes (${fmt(g.w * g.h)} celdas)…`);
@@ -380,6 +390,7 @@ function limpiarResultados() {
   document.querySelector('[data-capa="cobertura"]').disabled = true;
   if (E.capa === "cobertura") E.capa = "escurrimiento";
   marcaQ.remove();
+  hud.hidden = true;
   if (mapa.getLayer("capa")) mapa.setLayoutProperty("capa", "visibility", "none");
   mapa.getSource("curvas")?.setData(vacio);
   mapa.getSource("cauces")?.setData(vacio);
@@ -411,6 +422,7 @@ function mostrarResultados() {
   for (const id of ["paso-resultados", "paso-tormenta", "paso-exportar"]) $(id).hidden = false;
   $("res-tormenta").hidden = true;
   marcaQ.remove();
+  hud.hidden = true;
   document.querySelector('[data-capa="cobertura"]').disabled = true;
   if (E.capa === "cobertura") elegirCapa("escurrimiento");
   cargarLluvias();
@@ -461,12 +473,16 @@ function actualizarAgua(mostrar, porProfundidad) {
   const src = mapa.getSource("agua");
   if (!src) return;
   if (!mostrar || !E.an) { src.setData(vacio); return; }
-  const prof = E.an.tormenta ? E.an.tormenta.profT : E.an.prof;
-  src.setData(laminasDeAgua(E.g, prof, E.an.mask));
+  const t = E.an.tormenta;
+  const niveles = t && t.ref ? nivelesTormenta(t.ref.dRef) : undefined;
+  src.setData(laminasDeAgua(E.g, t ? t.profT : E.an.prof, E.an.mask, { niveles }));
   // en "escurrimiento" el agua quieta va en un solo tono suave, para no competir con los cauces
+  const cols = niveles ? COLORES_AGUA : ["#8fd3ff", "#4aa8ff", "#1f78d1", "#0b4fa3"];
   mapa.setPaintProperty("agua", "fill-color", porProfundidad
-    ? ["match", ["get", "nivel"], 0, "#8fd3ff", 1, "#4aa8ff", 2, "#1f78d1", "#0b4fa3"] : "#6cc4ff");
-  mapa.setPaintProperty("agua", "fill-opacity", porProfundidad ? 0.82 : 0.6);
+    ? ["match", ["get", "nivel"], ...cols.slice(0, -1).flatMap((c, k) => [k, c]), cols[cols.length - 1]] : "#6cc4ff");
+  mapa.setPaintProperty("agua", "fill-opacity", porProfundidad ? 0.86 : 0.6);
+  // hasta dónde llega el agua con la tormenta de 100 años (línea punteada), si se mira una menor
+  mapa.getSource("agua-max")?.setData(porProfundidad && t && t.ref && t.T < 100 ? t.ref.contorno100 : vacio);
 }
 
 // difuminado del borde: 1 dentro del polígono, y fuera baja suavemente a 0 (sin cortes duros)
@@ -508,7 +524,13 @@ function actualizarCauces(mostrar) {
   // normalización logarítmica a 0..1 para grosor y color
   let vmin = Infinity, vmax = 0;
   for (const f of fc.features) { const v = f.properties.v; if (v > 0) { vmin = Math.min(vmin, v); vmax = Math.max(vmax, v); } }
-  const l0 = Math.log10(Math.max(vmin, T ? 0.005 : 1)), l1 = Math.log10(Math.max(vmax, 1e-9));
+  let l0 = Math.log10(Math.max(vmin, T ? 0.005 : 1)), l1 = Math.log10(Math.max(vmax, 1e-9));
+  if (T && T.ref) {
+    // con tormenta la escala es FIJA para el caso (la de 100 años): una tormenta menor se ve con cauces más
+    // delgados y claros, y desaparecen los que llevan poca agua; así se nota la diferencia entre tormentas
+    l1 = Math.log10(T.ref.qRef); l0 = l1 - 1.8;
+    fc.features = fc.features.filter((f) => f.properties.v >= Math.pow(10, l0));
+  }
   for (const f of fc.features) f.properties.t = Math.max(0, Math.min(1, (Math.log10(Math.max(f.properties.v, 1e-9)) - l0) / (l1 - l0 || 1)));
   src.setData(fc);
 }
@@ -607,7 +629,8 @@ function iniciarLluvia() {
   const T = E.an.tormenta;
   const escMedia = T ? (T.stats.genera / (idx.length * E.g.dx * E.g.dy)) * 1000 : 0; // mm
   let escMax = 1;
-  if (T) {
+  if (T && T.ref) escMax = T.ref.escRef;
+  else if (T) {
     // referencia = percentil 90 fuera de pozas (las lagunas escurren ~100 % y aplastarían al resto)
     const v = Array.from(celdas).filter((i) => !enPoza(i)).map((i) => T.escurre[i]).sort((x, y) => x - y);
     escMax = Math.max(1, v[Math.floor(v.length * 0.9)] || 1);
@@ -659,38 +682,98 @@ function mostrarIDF() {
     filas.map(([n, v, est]) => `<div class="idf-fila"><span>${n}${est ? " <small>est.</small>" : ""}</span><i><u style="width:${((100 * v) / max).toFixed(1)}%"></u></i><b>${mm(v)}</b></div>`).join("");
 }
 
-document.querySelectorAll(".retornos button").forEach((b) => (b.onclick = () => {
-  E.T = Number(b.dataset.t);
-  mostrarIDF();
-  if (E.an && E.an.tormenta) simularTormenta();
-}));
+document.querySelectorAll(".retornos button").forEach((b) => (b.onclick = () => irATormenta(Number(b.dataset.t))));
 $("suelo").onchange = () => { $("suelo-txt").textContent = SUELOS[$("suelo").value]; if (E.an && E.an.tormenta) simularTormenta(); };
 $("suelo-txt").textContent = SUELOS[$("suelo").value];
 
-async function simularTormenta() {
+// ---------- serie de tormentas (2 a 100 años) ----------
+// Se calculan todas para el mismo terreno y suelo. La de 100 años fija la escala de colores y grosores
+// (referencias), así al cambiar de tormenta se ve de verdad cuánto crece el agua.
+const RETS = [2, 5, 10, 20, 50, 100];
+const esperar = (ms) => new Promise((ok) => setTimeout(ok, ms));
+const m3c = (v) => (v >= 1e6 ? `${fmt(v / 1e6, v >= 1e8 ? 0 : 1)} M m³` : v >= 1e4 ? `${fmt(v / 1e3)} mil m³` : `${fmt(Math.round(v))} m³`);
+
+// caudal máximo en un cauce visible (fuera de lagunas y llanos rellenados)
+function caudalVisible(an, t) {
+  let iVis = -1, qVis = 0;
+  for (let i = 0; i < t.qp.length; i++) {
+    if (!an.mask[i] || an.prof[i] >= 0.01 || !(t.qp[i] > qVis)) continue;
+    qVis = t.qp[i]; iVis = i;
+  }
+  if (iVis < 0) { iVis = t.stats.iMax; qVis = t.stats.qMax; }
+  return { qVis, iVis };
+}
+
+function referencias(an, t) {
+  const d = [], e = [];
+  for (let i = 0; i < an.mask.length; i++) {
+    if (!an.mask[i]) continue;
+    if (t.profT[i] >= 0.05) d.push(t.profT[i]); else e.push(t.escurre[i]);
+  }
+  d.sort((a, b) => a - b); e.sort((a, b) => a - b);
+  const dRef = d.length ? d[Math.floor(d.length * 0.9)] : 0.5;
+  return {
+    qRef: Math.max(t.qVis, 1e-3), dRef, escRef: Math.max(1, e[Math.floor(e.length * 0.9)] || 1),
+    contorno100: laminasDeAgua(E.g, t.profT, an.mask, { niveles: nivelesTormenta(dRef) }),
+  };
+}
+
+function calcularTormenta(an, T, suelo) {
+  const serie = ((an.serie ??= {})[suelo] ??= {});
+  serie.p ??= {};
+  serie.p[T] ??= (async () => {
+    const fila = E.lluvias.P[T];
+    const cn = numerosCurva(an.clase, suelo);
+    const r = await pedir({ tipo: "tormenta", cn, P24: fila[3], idf: ajusteIDF(fila) }, [cn.buffer]);
+    const t = { ...r, T, P24: fila[3], suelo, ...caudalVisible(an, r) };
+    serie[T] = t;
+    return t;
+  })();
+  return serie.p[T];
+}
+
+async function completarSerie(an, suelo) {
+  for (const T of RETS) {
+    if (an !== E.an) return;
+    try { await calcularTormenta(an, T, suelo); } catch (err) { console.error(err); return; }
+    pintarComparacion(); actualizarHUD();
+  }
+}
+
+async function simularTormenta({ animar = false } = {}) {
   if (!E.an || !E.lluvias) return;
+  const an = E.an, T = E.T, suelo = $("suelo").value;
   $("b-tormenta").disabled = true;
   $("b-tormenta").classList.add("simulando");
   try {
-    if (!E.an.clase) {
-      try {
-        E.an.clase = await cargarCobertura(API, E.g, estado);
-      } catch (err) {
-        console.error(err);
-        E.an.clase = new Uint8Array(E.g.w * E.g.h); // sin cobertura: se asume cultivo
-        estado("No pude leer la cobertura de suelo; se asume terreno cultivado.", true);
+    if (!an.clase) {
+      const pq = E.paqueteDemo ? await E.paqueteDemo : null;
+      if (pq && pq.clase && pq.clase.length === E.g.w * E.g.h) an.clase = pq.clase;
+      else {
+        try {
+          an.clase = await cargarCobertura(API, E.g, estado);
+        } catch (err) {
+          console.error(err);
+          an.clase = new Uint8Array(E.g.w * E.g.h); // sin cobertura: se asume cultivo
+          estado("No pude leer la cobertura de suelo; se asume terreno cultivado.", true);
+        }
       }
       document.querySelector('[data-capa="cobertura"]').disabled = false;
     }
-    if (!$("estado").classList.contains("error")) estado("Simulando la tormenta…");
-    const fila = E.lluvias.P[E.T];
-    const cn = numerosCurva(E.an.clase, $("suelo").value);
-    const r = await pedir({ tipo: "tormenta", cn, P24: fila[3], idf: ajusteIDF(fila) }, [cn.buffer]);
-    E.an.tormenta = { ...r, T: E.T, P24: fila[3], suelo: $("suelo").value };
+    const serie = an.serie?.[suelo];
+    if (!(serie && serie[T] && serie[100]) && !$("estado").classList.contains("error")) estado("Simulando la tormenta…");
+    const t100 = await calcularTormenta(an, 100, suelo);
+    t100.ref ??= referencias(an, t100);
+    const t = await calcularTormenta(an, T, suelo);
+    t.ref = t100.ref;
+    if (an !== E.an || T !== E.T || suelo !== $("suelo").value) return; // el usuario cambió algo mientras tanto
+    an.tormenta = t;
     if (!$("estado").classList.contains("error")) estado("");
     mostrarTormenta();
     if (!["escurrimiento", "encharcamiento"].includes(E.capa)) elegirCapa("escurrimiento"); else pintarCapa();
     if ($("t-lluvia").checked) { detenerLluvia(); $("t-lluvia").checked = true; iniciarLluvia(); }
+    actualizarHUD(animar);
+    if (RETS.some((r) => !an.serie[suelo][r])) completarSerie(an, suelo);
   } catch (err) {
     console.error(err);
     estado(err.message || String(err), true);
@@ -700,23 +783,93 @@ async function simularTormenta() {
     actualizarRiel();
   }
 }
-$("b-tormenta").onclick = simularTormenta;
+
+// comparación de todas las tormentas (panel): columnas por período de retorno, la actual destacada
+function pintarComparacion() {
+  const el = $("comparacion"), t = E.an?.tormenta;
+  if (!el || !t) return;
+  const serie = E.an.serie?.[t.suelo] || {};
+  const graf = (tit, val, fv) => {
+    const vs = RETS.map((T) => (serie[T] ? val(serie[T]) : null));
+    const max = Math.max(1e-9, ...vs.filter((v) => v != null));
+    return `<div class="cmp-graf"><div class="cmp-tit">${tit}</div><div class="cmp-val">${fv(val(t))}</div><div class="cmp-cols">` +
+      RETS.map((T, k) => `<button type="button" data-t="${T}" class="${T === t.T ? "activa" : ""}" title="${T} años${vs[k] != null ? ": " + fv(vs[k]) : ""}">` +
+        `<i style="height:${vs[k] != null ? (6 + (94 * vs[k]) / max).toFixed(1) : 3}%"></i><span>${T}</span></button>`).join("") + `</div></div>`;
+  };
+  const base = serie[2];
+  const veces = (a, b) => (b > 0 ? `×${fmt(a / b, a / b < 10 ? 1 : 0)}` : "—");
+  el.innerHTML = `<div class="cmp-cab"><b>Cómo cambia según la tormenta</b><span>toca una columna</span></div><div class="cmp">` +
+    graf("Caudal máx.", (x) => x.qVis, caudalTxt) +
+    graf("Escurre", (x) => x.stats.genera, m3c) +
+    graf("En pozas", (x) => x.stats.enCharcos, m3c) + `</div>` +
+    (base && t.T > 2 ? `<p class="cmp-delta">Frente a una lluvia de 2 años, esta tormenta lleva <b>${veces(t.qVis, base.qVis)}</b> de caudal y <b>${veces(t.stats.genera, base.stats.genera)}</b> de agua escurriendo` +
+      (t.stats.enCharcos > 1.1 * base.stats.enCharcos ? `, y junta <b>${veces(t.stats.enCharcos, base.stats.enCharcos)}</b> de agua en pozas.` : `. Las pozas ya se llenan con la de 2 años: el exceso escurre aguas abajo.`) + `</p>` : "");
+  el.querySelectorAll("button[data-t]").forEach((b) => (b.onclick = () => irATormenta(Number(b.dataset.t))));
+}
+
+function irATormenta(T) {
+  E.T = T;
+  mostrarIDF();
+  if (E.an && E.an.tormenta) return simularTormenta({ animar: true });
+}
+
+// tablero sobre el mapa con la tormenta actual y cuánto crece frente a la de 2 años
+const hud = document.createElement("div");
+hud.className = "hud-tormenta";
+hud.hidden = true;
+hud.innerHTML = `<div class="hud-rets">${RETS.map((T) => `<button type="button" data-t="${T}">${T}</button>`).join("")}<small>años</small></div>
+  <div class="hud-datos"></div>
+  <button type="button" class="hud-play" title="Recorre las tormentas de 2 a 100 años"><svg viewBox="0 0 16 16"><path d="M4 2.5v11l9-5.5z"/></svg><span>Comparar</span></button>`;
+document.body.append(hud);
+hud.querySelectorAll(".hud-rets button").forEach((b) => (b.onclick = () => { detenerComparacion(); irATormenta(Number(b.dataset.t)); }));
+
+function actualizarHUD(animar = false) {
+  const t = E.an?.tormenta;
+  if (!t) { hud.hidden = true; return; }
+  hud.hidden = false;
+  hud.querySelectorAll(".hud-rets button").forEach((b) => b.classList.toggle("activa", Number(b.dataset.t) === t.T));
+  const base = E.an.serie?.[t.suelo]?.[2];
+  const dif = (a, b) => (t.T === 2 ? "<em>base</em>" : base && b > 0 ? `<em>×${fmt(a / b, a / b < 10 ? 1 : 0)} vs 2 años</em>` : "<em>&nbsp;</em>");
+  hud.querySelector(".hud-datos").innerHTML =
+    `<div><span>Lluvia 24 h</span><b>${fmt(t.P24)} mm</b>${dif(t.P24, base?.P24)}</div>` +
+    `<div><span>Caudal máx.</span><b>${caudalTxt(t.qVis)}</b>${dif(t.qVis, base?.qVis)}</div>` +
+    `<div><span>Escurre</span><b>${m3c(t.stats.genera)}</b>${dif(t.stats.genera, base?.stats.genera)}</div>` +
+    `<div><span>En pozas</span><b>${m3c(t.stats.enCharcos)}</b>${dif(t.stats.enCharcos, base?.stats.enCharcos)}</div>`;
+  if (animar) { hud.classList.remove("pulso"); void hud.offsetWidth; hud.classList.add("pulso"); }
+}
+
+let comparando = false;
+function detenerComparacion() {
+  comparando = false;
+  hud.querySelector(".hud-play").classList.remove("on");
+  hud.querySelector(".hud-play span").textContent = "Comparar";
+}
+hud.querySelector(".hud-play").onclick = async () => {
+  if (comparando) { detenerComparacion(); return; }
+  comparando = true;
+  hud.querySelector(".hud-play").classList.add("on");
+  hud.querySelector(".hud-play span").textContent = "Detener";
+  for (const T of RETS) {
+    if (!comparando || !E.an) break;
+    await irATormenta(T);
+    await esperar(1800);
+  }
+  detenerComparacion();
+};
+window.__gotyxComparar = () => hud.querySelector(".hud-play").click();
+
+$("b-tormenta").onclick = () => simularTormenta();
 
 const caudalTxt = (q) => (q >= 1 ? `${fmt(q, 1)} m³/s` : `${fmt(q * 1000)} L/s`);
 
 function mostrarTormenta() {
   const t = E.an.tormenta, s = t.stats;
   // el caudal máximo (tarjeta y etiqueta) se toma en el punto de mayor caudal de un cauce visible (fuera de lagunas y llanos rellenados)
-  let iVis = -1, qVis = 0;
-  for (let i = 0; i < t.qp.length; i++) {
-    if (!E.an.mask[i] || E.an.prof[i] >= 0.01 || !(t.qp[i] > qVis)) continue;
-    qVis = t.qp[i]; iVis = i;
-  }
-  if (iVis < 0) { iVis = s.iMax; qVis = s.qMax; }
-  t.qVis = qVis;
+  const { qVis, iVis } = t;
 
   const pct = (v) => `${fmt((100 * v) / s.llueve)} %`;
   $("res-tormenta").innerHTML =
+    `<div id="comparacion" class="comparacion"></div>` +
     `<p class="explica">Con una lluvia de <b>${t.T} años</b> (${fmt(t.P24)} mm en 24 h) sobre tu terreno:</p>` +
     tarjeta(m3(s.llueve), "de agua cae en total") +
     tarjeta(m3(s.genera), `escurre por la superficie (${pct(s.genera)})`, "agua") +
@@ -727,6 +880,7 @@ function mostrarTormenta() {
     tarjeta(caudalTxt(qVis), "caudal máximo en el cauce principal (en el peak de la tormenta)", "ancha agua") +
     `<p class="explica">Cobertura del suelo de ESA WorldCover y suelo tipo ${t.suelo} (número de curva medio ${fmt(s.cnMedio)}). Lluvias de GPEX, base satelital de ~10 km${E.lluvias.distanciaKm > 3 ? ` (celda a ${fmt(E.lluvias.distanciaKm)} km)` : ""}: es una estimación, no reemplaza un estudio hidrológico.</p>`;
   $("res-tormenta").hidden = false;
+  pintarComparacion();
   if (iVis >= 0) {
     const r = (iVis / E.g.w) | 0, c = iVis - r * E.g.w;
     etiquetaQ.textContent = `Caudal máx. ${caudalTxt(qVis)}`;
@@ -907,7 +1061,23 @@ const DEMOS = {
     capa: "encharcamiento", exagerar: 2.2, camara: { bearing: 8, pitch: 50, zoom: 0 } },
 };
 const demo = DEMOS[params.get("demo")];
+// paquete estático de la demo (relieve + cobertura ya recortados): evita leer Copernicus y WorldCover
+// por el intermediario, que es lo más lento de la carga. Si falla, se usa el camino normal.
+async function leerPaqueteDemo(caso) {
+  const r = await fetch(`data/demo/${caso}.bin.gz`);
+  if (!r.ok) return null;
+  let b = await r.arrayBuffer();
+  const u = new Uint8Array(b, 0, 2);
+  if (u[0] === 0x1f && u[1] === 0x8b) b = await new Response(new Blob([b]).stream().pipeThrough(new DecompressionStream("gzip"))).arrayBuffer();
+  const lh = new DataView(b).getUint32(0, true);
+  const cab = JSON.parse(new TextDecoder().decode(new Uint8Array(b, 4, lh)));
+  const o = 4 + lh + ((4 - ((4 + lh) % 4)) % 4), n = cab.w * cab.h;
+  const z = new Float32Array(b.slice(o, o + 4 * n));
+  const clase = new Uint8Array(b.slice(o + 4 * n, o + 5 * n));
+  return { g: { ...cab, z }, clase };
+}
 if (demo) {
+  E.paqueteDemo = leerPaqueteDemo(params.get("demo")).catch((err) => { console.warn(err); return null; });
   document.body.classList.add("modo-demo");
   const aviso = document.createElement("div");
   aviso.className = "demo-aviso";
@@ -950,6 +1120,9 @@ if (demo) {
 
   const esperarQue = (cond) => new Promise((ok) => { const t = setInterval(() => { if (cond()) { clearInterval(t); ok(); } }, 100); });
   const correrDemo = async () => {
+    // el relieve 3D empieza a bajar desde ya, en paralelo con el cálculo
+    $("exagerar").value = demo.exagerar; $("exagerar").dispatchEvent(new Event("input"));
+    mapa.setTerrain({ source: "dem", exaggeration: demo.exagerar });
     E.anillo = [...demo.anillo, demo.anillo[0]];
     dibujarPoligono();
     $("info-poligono").hidden = false;
@@ -974,7 +1147,7 @@ if (demo) {
     $("t-3d").checked = true; $("ctl3d").hidden = false;
     mapa.setTerrain({ source: "dem", exaggeration: demo.exagerar });
     // espera a que el relieve cargue antes de mostrar (sin saltos ni teselas a medio cargar)
-    await new Promise((ok) => { mapa.once("idle", ok); setTimeout(ok, 6000); });
+    await new Promise((ok) => { mapa.once("idle", ok); setTimeout(ok, 2500); });
     const cam = mapa.cameraForBounds(caja, { padding: pad, bearing: demo.camara.bearing });
     clearInterval(vigilar);
     carga.querySelector(".dc-barra i").style.width = "100%";
