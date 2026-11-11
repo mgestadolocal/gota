@@ -315,6 +315,61 @@ $("buscar").onsubmit = async (e) => {
   finally { $("buscar").classList.remove("cargando"); }
 };
 
+// ---------- mi ubicación (GPS del dispositivo) ----------
+const UBIC = { marca: null, listo: false };
+function circuloPrecision(lon, lat, r) {
+  const k = 111320, pts = [];
+  for (let i = 0; i <= 64; i++) {
+    const a = (i / 64) * 2 * Math.PI;
+    pts.push([lon + (r * Math.cos(a)) / (k * Math.cos((lat * Math.PI) / 180)), lat + (r * Math.sin(a)) / k]);
+  }
+  return { type: "Feature", geometry: { type: "Polygon", coordinates: [pts] }, properties: {} };
+}
+function mostrarUbicacion(lon, lat, precision) {
+  if (!UBIC.marca) {
+    const el = document.createElement("div");
+    el.className = "punto-ubic";
+    el.title = "Tu ubicación";
+    UBIC.marca = new maplibregl.Marker({ element: el }).setLngLat([lon, lat]).addTo(mapa);
+  } else UBIC.marca.setLngLat([lon, lat]);
+  const datos = { type: "FeatureCollection", features: [circuloPrecision(lon, lat, Math.max(precision, 5))] };
+  if (mapa.getSource("ubic")) mapa.getSource("ubic").setData(datos);
+  else {
+    mapa.addSource("ubic", { type: "geojson", data: datos });
+    mapa.addLayer({ id: "ubic", type: "fill", source: "ubic", paint: { "fill-color": "#5cc8ff", "fill-opacity": 0.14 } });
+    mapa.addLayer({ id: "ubic-borde", type: "line", source: "ubic", paint: { "line-color": "#5cc8ff", "line-opacity": 0.6, "line-width": 1 } });
+  }
+}
+$("b-ubicacion").onclick = () => {
+  const b = $("b-ubicacion");
+  if (!("geolocation" in navigator)) return estado("Este dispositivo no permite obtener la ubicación.", true);
+  if (!window.isSecureContext) return estado("La ubicación solo funciona con https.", true);
+  b.classList.add("buscando");
+  estado("Buscando tu ubicación…");
+  navigator.geolocation.getCurrentPosition(
+    (pos) => {
+      b.classList.remove("buscando");
+      b.classList.add("activa");
+      const { longitude: lon, latitude: lat, accuracy } = pos.coords;
+      const enChile = lon > -76.5 && lon < -66 && lat > -56.5 && lat < -17;
+      estado(enChile ? (accuracy > 500 ? `Ubicación aproximada (±${fmt(accuracy / 1000, 1)} km).` : "") : "Estás fuera de Chile: las lluvias de diseño solo cubren Chile.", !enChile);
+      const hacer = () => {
+        mostrarUbicacion(lon, lat, accuracy);
+        const m = margenMapa();
+        const zoom = accuracy > 2000 ? 12 : accuracy > 300 ? 14 : 16;
+        mapa.flyTo({ center: [lon, lat], zoom, offset: [(m.left - m.right) / 2, (m.top - m.bottom) / 2], duration: 1600, essential: true });
+      };
+      mapa.loaded() || mapa.isStyleLoaded() ? hacer() : mapa.once("load", hacer);
+    },
+    (err) => {
+      b.classList.remove("buscando");
+      estado(err.code === 1 ? "No diste permiso para usar tu ubicación. Actívalo en el candado de la barra de direcciones."
+        : err.code === 3 ? "Tu ubicación tardó demasiado. Intenta de nuevo." : "No pude obtener tu ubicación.", true);
+    },
+    { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 },
+  );
+};
+
 // ---------- DEM propio ----------
 $("archivo").onchange = (e) => {
   const f = e.target.files[0];

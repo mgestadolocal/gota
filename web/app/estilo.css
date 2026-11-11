@@ -113,14 +113,26 @@ button:focus-visible, .boton:focus-within, select:focus-visible { outline: 2px s
 #paso-terreno { position: relative; z-index: 5; }
 .buscar .lupa { position: absolute; left: 13px; top: 50%; width: 17px; height: 17px; transform: translateY(-50%); color: var(--agua); pointer-events: none; }
 .buscar input {
-  width: 100%; padding: 12px 40px 12px 40px; border: 1px solid var(--borde); border-radius: 12px; background: rgba(3, 12, 19, 0.65);
+  width: 100%; padding: 12px 84px 12px 40px; border: 1px solid var(--borde); border-radius: 12px; background: rgba(3, 12, 19, 0.65);
   font-weight: 600; transition: border-color 0.2s, box-shadow 0.2s; -webkit-appearance: none; appearance: none;
 }
 .buscar input::placeholder { color: var(--tenue); font-weight: 500; }
 .buscar input::-webkit-search-cancel-button { display: none; }
 .buscar input:focus { outline: none; border-color: var(--borde-2); box-shadow: 0 0 0 4px rgba(92, 200, 255, 0.12), var(--brillo); }
-.buscar kbd { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); font: 600 11px var(--mono); color: var(--tenue); border: 1px solid var(--borde); border-radius: 6px; padding: 2px 6px; pointer-events: none; }
+.buscar kbd { position: absolute; right: 48px; top: 50%; transform: translateY(-50%); font: 600 11px var(--mono); color: var(--tenue); border: 1px solid var(--borde); border-radius: 6px; padding: 2px 6px; pointer-events: none; }
 .buscar.cargando kbd { color: transparent; border-color: transparent; }
+.buscar .ubicacion {
+  position: absolute; right: 6px; top: 50%; transform: translateY(-50%); width: 34px; height: 34px; padding: 0; display: grid; place-items: center;
+  border: 0; border-left: 1px solid var(--borde); border-radius: 0 9px 9px 0; background: transparent; color: var(--agua); cursor: pointer;
+}
+.buscar .ubicacion svg { width: 18px; height: 18px; }
+.buscar .ubicacion:hover, .buscar .ubicacion:focus-visible { color: var(--acento-2); background: rgba(92, 200, 255, 0.1); outline: none; }
+.buscar .ubicacion.buscando svg { animation: latido 1s ease-in-out infinite; }
+.buscar .ubicacion.activa { color: var(--verde); }
+@keyframes latido { 50% { opacity: 0.35; transform: scale(0.85); } }
+.punto-ubic { width: 16px; height: 16px; border-radius: 50%; background: #2b8fd6; border: 3px solid #fff; box-shadow: 0 0 0 0 rgba(92, 200, 255, 0.6); animation: onda-ubic 2s ease-out infinite; }
+@keyframes onda-ubic { 70% { box-shadow: 0 0 0 14px rgba(92, 200, 255, 0); } 100% { box-shadow: 0 0 0 0 rgba(92, 200, 255, 0); } }
+@media (prefers-reduced-motion: reduce) { .punto-ubic, .buscar .ubicacion.buscando svg { animation: none; } }
 .buscar.cargando kbd::after { content: ""; position: absolute; inset: 0; margin: auto; width: 14px; height: 14px; border-radius: 50%; border: 2px solid rgba(92, 200, 255, 0.25); border-top-color: var(--agua); animation: gira 0.7s linear infinite; }
 @keyframes gira { to { transform: rotate(360deg); } }
 .sugerencias {
@@ -408,3 +420,4 @@ input[type="range"]::-moz-range-thumb { width: 12px; height: 12px; border-radius
   .hud-datos div { min-width: 0; } .hud-datos b { font-size: 15px; }
   .hud-play { padding: 8px 10px; } .hud-play span { display: none; }
 }
+.guia .ico-guia { width: 14px; height: 14px; vertical-align: -2px; color: var(--agua); }
