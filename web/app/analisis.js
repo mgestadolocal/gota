@@ -13,11 +13,12 @@ self.onmessage = (e) => {
   const m = e.data;
   try {
     if (m.tipo === "analizar") {
-      const g = { w: m.w, h: m.h, z: m.z, mask: m.mask, dx: m.dx, dy: m.dy };
+      const g = { w: m.w, h: m.h, z: m.z, mask: m.mask, dx: m.dx, dy: m.dy, quema: m.quema || null, externo: m.externo || null };
       const r = analizar(g);
+      delete g.quema; delete g.externo;
       U = { ...g, f: r._f, orden: r._orden, dir: r.dir.slice(), prof: r.prof.slice(), acc: r.acc.slice() };
       delete r._f; delete r._orden;
-      self.postMessage({ tipo: "analisis", ...r }, [r.pendiente.buffer, r.prof.buffer, r.acc.buffer, r.dir.buffer]);
+      self.postMessage({ tipo: "analisis", ...r }, [r.pendiente.buffer, r.prof.buffer, r.acc.buffer, r.dir.buffer].concat(r.externo ? [r.externo.buffer] : []));
     } else if (m.tipo === "tormenta") {
       const r = tormenta(U, m);
       self.postMessage({ tipo: "tormenta", ...r }, [r.profT.buffer, r.qp.buffer, r.escurre.buffer]);
@@ -103,16 +104,19 @@ function rellenar(w, h, z) {
   return f;
 }
 
-function analizar({ w, h, z, mask, dx, dy }) {
+function analizar({ w, h, z, mask, dx, dy, quema, externo }) {
   const n = w * h;
   const A = dx * dy;
   const dd = Math.hypot(dx, dy);
   const dist = [dx, dd, dy, dd, dx, dd, dy, dd];
 
-  // 1) relleno y profundidad de encharcamiento
-  const f = rellenar(w, h, z);
+  // 1) relleno y profundidad de encharcamiento. Con cauces conocidos (quema), el relleno y el flujo se calculan
+  // sobre el DEM con los cauces rebajados; el encharcamiento se mide contra el DEM original (nunca negativo).
+  let zq = z;
+  if (quema) { zq = new Float32Array(n); for (let i = 0; i < n; i++) zq[i] = z[i] - quema[i]; }
+  const f = rellenar(w, h, zq);
   const prof = new Float32Array(n);
-  for (let i = 0; i < n; i++) prof[i] = Number.isNaN(z[i]) ? NaN : f[i] - z[i];
+  for (let i = 0; i < n; i++) prof[i] = Number.isNaN(z[i]) ? NaN : Math.max(0, f[i] - z[i]);
 
   // 2) dirección de flujo D8 sobre la superficie rellenada
   const dir = new Int8Array(n).fill(-1);
@@ -153,6 +157,13 @@ function analizar({ w, h, z, mask, dx, dy }) {
     acc[rec] += acc[c];
     if (--grado[rec] === 0) cola[qt++] = rec;
   }
+  // celdas aguas abajo de un río que viene de fuera del área (su cuenca real es mucho mayor que la analizada)
+  if (externo) {
+    for (let t = 0; t < qt; t++) {
+      const c = cola[t], k = dir[c];
+      if (externo[c] && k >= 0) externo[c + VY[k] * w + VX[k]] = 1;
+    }
+  }
 
   // 4) pendiente (Horn), en %
   const pendiente = new Float32Array(n);
@@ -192,12 +203,12 @@ function analizar({ w, h, z, mask, dx, dy }) {
     while (pendiente[i] >= CLASES[k]) k++;
     clases[k]++;
     if (prof[i] >= 0.05) { encArea += A; encVol += prof[i] * A; if (prof[i] > encMax) encMax = prof[i]; }
-    if (acc[i] > accMax) accMax = acc[i];
+    if (acc[i] > accMax && !(externo && externo[i])) accMax = acc[i];
   }
   if (nc === 0) throw new Error("El polígono no contiene celdas con datos de elevación.");
 
   return {
-    pendiente, prof, acc, dir, _f: f, _orden: cola.subarray(0, qt),
+    pendiente, prof, acc, dir, externo, _f: f, _orden: cola.subarray(0, qt),
     stats: {
       celdas: nc, area: nc * A, zmin, zmax, zmedia: zsum / nc, pendMedia: psum / nc,
       clases: clases.map((x) => x / nc), limites: CLASES.slice(0, -1),

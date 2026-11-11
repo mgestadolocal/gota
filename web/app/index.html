@@ -78,6 +78,9 @@
           <strong id="fuente-nombre">Copernicus GLO-30 (30 m, todo Chile)</strong>
           <a href="#" id="quitar-archivo" hidden>usar Copernicus</a>
         </div>
+        <label class="switch osm" title="Los ríos y esteros mapeados se graban en el relieve para que el agua corra por donde corre de verdad. Solo con DEM de 10 m o más gruesos.">
+          <input type="checkbox" id="t-osm" checked /><i></i><span>Guiar el agua por ríos y esteros conocidos <small>OpenStreetMap</small></span>
+        </label>
         <button id="b-analizar" class="primario ancho grande" disabled><svg aria-hidden="true"><use href="#i-radar" /></svg>Analizar terreno</button>
         <div id="estado" class="estado" hidden></div>
       </section>
@@ -85,6 +88,7 @@
       <section class="paso" id="paso-resultados" hidden>
         <h2><span class="num">02</span>Qué dice el terreno<small>Diagnóstico</small></h2>
         <div id="tarjetas" class="tarjetas"></div>
+        <p id="nota-osm" class="nota-osm" hidden></p>
         <div class="subtitulo"><svg aria-hidden="true"><use href="#i-capas" /></svg>Capa en el mapa</div>
         <div class="capas" role="radiogroup" aria-label="Capa">
           <button data-capa="escurrimiento" class="activa">Escurrimiento</button>
@@ -141,7 +145,7 @@
         Elevación: <a href="https://spacedata.copernicus.eu/collections/copernicus-digital-elevation-model" target="_blank" rel="noopener">Copernicus DEM</a> © DLR/Airbus, ESA ·
         Relieve 3D: <a href="https://registry.opendata.aws/terrain-tiles/" target="_blank" rel="noopener">Terrain Tiles</a> ·
         Lluvias extremas: <a href="https://doi.org/10.4121/12764429.v4" target="_blank" rel="noopener">GPEX</a> (Gründemann et al., CC BY 4.0) ·
-        Cobertura: <a href="https://esa-worldcover.org" target="_blank" rel="noopener">ESA WorldCover 2021</a> (CC BY 4.0) · Búsqueda: <a href="https://photon.komoot.io" target="_blank" rel="noopener">Photon</a> / © OpenStreetMap ·
+        Cobertura: <a href="https://esa-worldcover.org" target="_blank" rel="noopener">ESA WorldCover 2021</a> (CC BY 4.0) · Búsqueda: <a href="https://photon.komoot.io" target="_blank" rel="noopener">Photon</a> · Cauces y búsqueda: © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> (ODbL) ·
         Prediagnóstico referencial; no reemplaza un levantamiento topográfico.
       </footer>
     </div>

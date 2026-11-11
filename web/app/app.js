@@ -10,6 +10,7 @@ registrarProtocolo();
 import { cargarCopernicus, cargarArchivo, mascara, esquinas, afin, areaAnillo } from "./dem.js";
 import { pintar, sombreado, curvas, equidistancia, leyenda, CLASES_PEND } from "./render.js";
 import { cargarCobertura } from "./cobertura.js";
+import { cargarCaucesOSM, rasterizarCauces, convieneQuemar } from "./cauces_osm.js";
 import { lluviasDiseno, ajusteIDF, numerosCurva, SUELOS } from "./lluvia.js";
 
 const params = new URLSearchParams(location.search);
@@ -419,8 +420,24 @@ $("b-analizar").onclick = async () => {
       : (E.paqueteDemo && (await E.paqueteDemo)?.g) || await cargarCopernicus(API, E.anillo, estado);
     const mask = mascara(g, E.anillo);
     if (!mask.some((v) => v)) throw new Error("No hay datos de elevación dentro del polígono.");
+    // cauces conocidos de OpenStreetMap (solo en DEM gruesos; si falla, se sigue sin ellos)
+    let quema = null;
+    E.osm = null;
+    if ($("t-osm").checked && convieneQuemar(g)) {
+      estado("Buscando ríos y esteros conocidos…");
+      const lineas = await cargarCaucesOSM(g);
+      if (lineas === null) E.osm = { error: true };
+      else if (lineas.length) {
+        const q = rasterizarCauces(g, lineas);
+        quema = q.quema;
+        const nombres = [...new Set(lineas.map((l) => l.nombre).filter(Boolean))];
+        E.osm = { km: q.km, nombres, rioExterno: q.rioExterno, riosExternos: q.riosExternos };
+      } else E.osm = { km: 0, nombres: [] };
+    }
     estado(`Calculando escurrimiento y pendientes (${fmt(g.w * g.h)} celdas)…`);
-    const r = await pedir({ tipo: "analizar", w: g.w, h: g.h, z: g.z.slice(), mask: mask.slice(), dx: g.dx, dy: g.dy });
+    const r = await pedir({ tipo: "analizar", w: g.w, h: g.h, z: g.z.slice(), mask: mask.slice(), dx: g.dx, dy: g.dy, quema,
+      externo: E.osm?.riosExternos?.length ? E.osm.rioExterno : null }, quema ? [quema.buffer] : []);
+    notaOSM();
     E.g = g;
     E.an = { ...r, mask, sombra: sombreado(g), borde: difuminado(mask, g.w, g.h) };
     estado("");
@@ -436,6 +453,20 @@ $("b-analizar").onclick = async () => {
     actualizarBotonAnalizar();
   }
 };
+
+function notaOSM() {
+  const el = $("nota-osm"), o = E.osm;
+  el.hidden = !o;
+  if (!o) return;
+  if (o.error) el.textContent = "No pude leer los ríos y esteros conocidos; el escurrimiento sale solo del relieve.";
+  else if (!o.km) el.textContent = "No hay ríos ni esteros mapeados en OpenStreetMap en esta zona; el escurrimiento sale solo del relieve.";
+  else {
+    const ej = o.nombres.slice(0, 3).join(", ");
+    el.innerHTML = `El escurrimiento sigue <b>${fmt(o.km, 1)} km de ríos y esteros conocidos</b>${ej ? ` (${escH(ej)}${o.nombres.length > 3 ? "…" : ""})` : ""} de OpenStreetMap, grabados en el relieve.` +
+      (o.riosExternos?.length ? ` <b>${escH(o.riosExternos.join(", "))}</b> trae${o.riosExternos.length > 1 ? "n" : ""} agua de una cuenca mucho mayor que esta área: su caudal no se estima aquí y no cuenta como caudal máximo.` : "");
+  }
+}
+$("t-osm").onchange = () => { if (E.an) { limpiarResultados(); estado("Vuelve a analizar para aplicar el cambio."); } };
 
 function limpiarResultados() {
   detenerLluvia();
@@ -748,11 +779,13 @@ const RETS = [2, 5, 10, 20, 50, 100];
 const esperar = (ms) => new Promise((ok) => setTimeout(ok, ms));
 const m3c = (v) => (v >= 1e6 ? `${fmt(v / 1e6, v >= 1e8 ? 0 : 1)} M m³` : v >= 1e4 ? `${fmt(v / 1e3)} mil m³` : `${fmt(Math.round(v))} m³`);
 
-// caudal máximo en un cauce visible (fuera de lagunas y llanos rellenados)
+// caudal máximo en un cauce visible (fuera de lagunas y llanos rellenados). Se excluyen los ríos que vienen de
+// fuera del área analizada: para ellos el modelo solo ve la lluvia local y su caudal real es mucho mayor.
 function caudalVisible(an, t) {
   let iVis = -1, qVis = 0;
+  const rio = an.externo;
   for (let i = 0; i < t.qp.length; i++) {
-    if (!an.mask[i] || an.prof[i] >= 0.01 || !(t.qp[i] > qVis)) continue;
+    if (!an.mask[i] || an.prof[i] >= 0.01 || (rio && rio[i]) || !(t.qp[i] > qVis)) continue;
     qVis = t.qp[i]; iVis = i;
   }
   if (iVis < 0) { iVis = t.stats.iMax; qVis = t.stats.qMax; }

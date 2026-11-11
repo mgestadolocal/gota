@@ -421,3 +421,8 @@ input[type="range"]::-moz-range-thumb { width: 12px; height: 12px; border-radius
   .hud-play { padding: 8px 10px; } .hud-play span { display: none; }
 }
 .guia .ico-guia { width: 14px; height: 14px; vertical-align: -2px; color: var(--agua); }
+
+.switch.osm { margin: 10px 0 2px; font-size: 13px; }
+.switch.osm small { font: 600 9.5px var(--mono); letter-spacing: 0.1em; text-transform: uppercase; color: var(--tenue); margin-left: 4px; }
+.nota-osm { margin: 10px 0 0; font-size: 12.5px; line-height: 1.45; color: var(--suave); border-left: 2px solid var(--agua-2); padding: 2px 0 2px 10px; }
+.nota-osm b { color: var(--texto); font-weight: 600; }

@@ -1,0 +1,3 @@
+Ríos y esteros (waterway=river|stream) de OpenStreetMap para Chile, en teselas de 0,2° ({lon/0.2}_{lat/0.2}.json).
+© OpenStreetMap contributors. Base de datos disponible bajo la Open Database License (ODbL) 1.0: https://opendatacommons.org/licenses/odbl/
+Generado con tools/cauces_osm.py desde el extracto de Geofabrik.
