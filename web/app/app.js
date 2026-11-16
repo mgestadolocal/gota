@@ -509,8 +509,9 @@ function mostrarResultados() {
   $("res-tormenta").hidden = true;
   marcaQ.remove();
   hud.hidden = true;
-  document.querySelector('[data-capa="cobertura"]').disabled = true;
-  if (E.capa === "cobertura") elegirCapa("escurrimiento");
+  document.querySelector('[data-capa="cobertura"]').disabled = !E.an.clase;
+  if (E.capa === "cobertura" && !E.an.clase) elegirCapa("escurrimiento");
+  asegurarCobertura(E.an);
   cargarLluvias();
   actualizarRiel();
   $("aviso-dsm").hidden = !E.g.esDSM;
@@ -828,26 +829,36 @@ async function completarSerie(an, suelo) {
   }
 }
 
+// cobertura del suelo (WorldCover o paquete de la demo): se carga una sola vez por análisis,
+// apenas termina el análisis, para que la capa «Cobertura» esté disponible sin simular la tormenta
+function asegurarCobertura(an) {
+  if (an.clase) return Promise.resolve(an.clase);
+  an.clasePromesa ??= (async () => {
+    const g = an.g ?? E.g;
+    const pq = E.paqueteDemo ? await E.paqueteDemo : null;
+    if (pq && pq.clase && pq.clase.length === g.w * g.h) an.clase = pq.clase;
+    else {
+      try {
+        an.clase = await cargarCobertura(API, g, estado);
+      } catch (err) {
+        console.error(err);
+        an.clase = new Uint8Array(g.w * g.h); // sin cobertura: se asume cultivo
+        if (an === E.an) estado("No pude leer la cobertura de suelo; se asume terreno cultivado.", true);
+      }
+    }
+    if (an === E.an) document.querySelector('[data-capa="cobertura"]').disabled = false;
+    return an.clase;
+  })();
+  return an.clasePromesa;
+}
+
 async function simularTormenta({ animar = false } = {}) {
   if (!E.an || !E.lluvias) return;
   const an = E.an, T = E.T, suelo = $("suelo").value;
   $("b-tormenta").disabled = true;
   $("b-tormenta").classList.add("simulando");
   try {
-    if (!an.clase) {
-      const pq = E.paqueteDemo ? await E.paqueteDemo : null;
-      if (pq && pq.clase && pq.clase.length === E.g.w * E.g.h) an.clase = pq.clase;
-      else {
-        try {
-          an.clase = await cargarCobertura(API, E.g, estado);
-        } catch (err) {
-          console.error(err);
-          an.clase = new Uint8Array(E.g.w * E.g.h); // sin cobertura: se asume cultivo
-          estado("No pude leer la cobertura de suelo; se asume terreno cultivado.", true);
-        }
-      }
-      document.querySelector('[data-capa="cobertura"]').disabled = false;
-    }
+    await asegurarCobertura(an);
     const serie = an.serie?.[suelo];
     if (!(serie && serie[T] && serie[100]) && !$("estado").classList.contains("error")) estado("Simulando la tormenta…");
     const t100 = await calcularTormenta(an, 100, suelo);
