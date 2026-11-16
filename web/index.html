@@ -219,7 +219,7 @@
       <div class="texto">
         <div class="etiqueta aparece">El informe</div>
         <h2 class="titulo aparece d1">Un informe de riesgo <em>listo para la reunión</em></h2>
-        <p class="bajada aparece d2">Cada análisis se descarga como un PDF de 3 hojas, con tu terreno, los mapas y lo que hay que hacer. Para el directorio, el comité de inversión, el banco o el concejo.</p>
+        <p class="bajada aparece d2">Cada análisis genera un informe de 3 hojas con tu terreno, los mapas y lo que hay que hacer. Para el directorio, el comité de inversión, el banco o el concejo.</p>
         <ol class="incluye-informe">
           <li class="aparece"><b>Nivel de atención</b><span>Bajo, medio o alto, de un vistazo, con el resumen de la tormenta en palabras simples.</span></li>
           <li class="aparece d1"><b>Mapas del terreno</b><span>Vista 3D, por dónde corre el agua y dónde se acumula, más la distribución de pendientes.</span></li>
@@ -231,15 +231,14 @@
           <button type="button" role="tab" aria-selected="false" data-caso="aculeo">Laguna de Aculeo</button>
         </div>
         <div class="ctas aparece">
-          <a class="boton primario" id="pdf-ejemplo" href="assets/informe/informe-ejemplo-macul.pdf" download><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11M7 10l5 5 5-5M5 20h14" /></svg>Descargar informe de ejemplo</a>
-          <a class="boton fantasma" id="demo-informe" href="app/?demo=macul">Genéralo en la demo<svg><use href="#flecha" /></svg></a>
+          <a class="boton primario" id="demo-informe" href="app/?demo=macul"><svg><use href="#play" /></svg>Ver el informe en la demo</a>
         </div>
-        <p class="pista-informe aparece">PDF real generado por Gotyx · 3 hojas A4 · ~2 MB</p>
+        <p class="pista-informe aparece">Vista previa · en la demo, presiona «Informe PDF» para verlo completo</p>
       </div>
       <div class="abanico aparece d1" id="abanico" aria-label="Hojas del informe de ejemplo">
-        <button type="button" class="hoja-i h3" data-n="3" aria-label="Ver hoja 3: tormenta, indicadores y recomendaciones"><img src="assets/informe/macul-3.jpg" srcset="assets/informe/macul-3-chico.jpg 520w, assets/informe/macul-3.jpg 900w" sizes="(max-width: 900px) 70vw, 420px" alt="Hoja 3 del informe: tormenta de 100 años, indicadores con semáforo y recomendaciones" loading="lazy" width="900" height="1273" /></button>
-        <button type="button" class="hoja-i h2" data-n="2" aria-label="Ver hoja 2: terreno y mapas"><img src="assets/informe/macul-2.jpg" srcset="assets/informe/macul-2-chico.jpg 520w, assets/informe/macul-2.jpg 900w" sizes="(max-width: 900px) 70vw, 420px" alt="Hoja 2 del informe: datos del terreno, pendientes, mapas de escurrimiento y acumulación" loading="lazy" width="900" height="1273" /></button>
-        <button type="button" class="hoja-i h1" data-n="1" aria-label="Ver hoja 1: portada y nivel de atención"><img src="assets/informe/macul-1.jpg" srcset="assets/informe/macul-1-chico.jpg 520w, assets/informe/macul-1.jpg 900w" sizes="(max-width: 900px) 70vw, 420px" alt="Portada del informe: vista 3D del terreno, cifras clave y nivel de atención alto" loading="lazy" width="900" height="1273" /></button>
+        <button type="button" class="hoja-i h3" data-n="3" aria-label="Ver hoja 3: tormenta, indicadores y recomendaciones"><img src="assets/informe/macul-3.jpg" draggable="false" alt="Hoja 3 del informe: tormenta de 100 años, indicadores con semáforo y recomendaciones" width="520" height="735" /></button>
+        <button type="button" class="hoja-i h2" data-n="2" aria-label="Ver hoja 2: terreno y mapas"><img src="assets/informe/macul-2.jpg" draggable="false" alt="Hoja 2 del informe: datos del terreno, pendientes, mapas de escurrimiento y acumulación" width="520" height="735" /></button>
+        <button type="button" class="hoja-i h1" data-n="1" aria-label="Ver hoja 1: portada y nivel de atención"><img src="assets/informe/macul-1.jpg" draggable="false" alt="Portada del informe: vista 3D del terreno, cifras clave y nivel de atención alto" width="520" height="735" /></button>
         <span class="sello s1">Nivel de atención · <b>Alto</b></span>
         <span class="sello s2">PDF · 3 hojas A4</span>
         <div class="puntos" aria-hidden="true"><i class="on"></i><i></i><i></i></div>
@@ -321,7 +320,7 @@
       <div class="lista-faq">
         <details class="aparece"><summary>¿Qué es Gotyx?</summary><p>Una plataforma web de simulación hidrológica: dibujas un terreno en cualquier lugar de Chile y ves por dónde escurre el agua lluvia, dónde se acumula, cuánto caudal baja por cada quebrada y cómo cambia con tormentas de 2 a 100 años de período de retorno.</p></details>
         <details class="aparece"><summary>¿Sirve para evaluar el riesgo de inundación o anegamiento de un terreno?</summary><p>Sí, como prediagnóstico. Muestra las zonas que se anegan, las quebradas que cruzan el terreno y el agua que llega desde los predios vecinos. Para un proyecto de ingeniería se complementa con un levantamiento topográfico y un estudio hidrológico de detalle.</p></details>
-        <details class="aparece"><summary>¿Qué incluye el informe PDF?</summary><p>Tres hojas A4: una portada con la vista del terreno, las cifras clave y el nivel de atención (bajo, medio o alto); los mapas de escurrimiento y acumulación con la distribución de pendientes; y la tormenta de diseño con el balance de agua, el caudal máximo, indicadores con semáforo y recomendaciones concretas. Puedes <a href="assets/informe/informe-ejemplo-macul.pdf" download style="color:var(--agua)">descargar un ejemplo</a>.</p></details>
+        <details class="aparece"><summary>¿Qué incluye el informe PDF?</summary><p>Tres hojas A4: una portada con la vista del terreno, las cifras clave y el nivel de atención (bajo, medio o alto); los mapas de escurrimiento y acumulación con la distribución de pendientes; y la tormenta de diseño con el balance de agua, el caudal máximo, indicadores con semáforo y recomendaciones concretas. Puedes verlo en la <a href="app/?demo=macul" style="color:var(--agua)">demo</a> con el botón «Informe PDF».</p></details>
         <details class="aparece"><summary>¿De dónde salen los datos de lluvia y de relieve?</summary><p>El relieve viene del modelo satelital Copernicus GLO-30 (30 m) o del DEM de tu dron o LiDAR. Las lluvias extremas, de GPEX (TU Delft), y la cobertura del suelo, de ESA WorldCover. Con eso se calculan la escorrentía (número de curva SCS) y los caudales (método racional).</p></details>
         <details class="aparece"><summary>¿Funciona en cualquier región de Chile?</summary><p>Sí, desde Arica hasta Magallanes. En el norte desértico hay menos registros de lluvias extremas, y la plataforma lo indica cuando ocurre.</p></details>
         <details class="aparece"><summary>¿Puedo usar el modelo de elevación de mi dron?</summary><p>Sí. Subes un GeoTIFF en UTM (WGS84 o SIRGAS) y el análisis se hace con su resolución, ideal para drenaje agrícola o nivelación de potreros.</p></details>

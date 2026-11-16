@@ -162,6 +162,15 @@ if (form) {
     pintar();
   }));
   sello.style.transition = "opacity 0.3s";
+  // vista previa: sin menú contextual y con un reintento si una imagen falla
+  ab.addEventListener("contextmenu", (e) => e.preventDefault());
+  hojas.forEach((h) => {
+    const img = h.querySelector("img");
+    const reintentar = () => { if (img.dataset.reintento) return; img.dataset.reintento = 1; img.src = img.src.split("?")[0] + "?r=" + Date.now(); };
+    img.addEventListener("error", reintentar);
+    if (img.complete && !img.naturalWidth) reintentar();
+    img.addEventListener("load", () => { delete img.dataset.reintento; });
+  });
   pintar();
 
   const tabs = [...document.querySelectorAll(".informe .selector button")];
@@ -169,14 +178,12 @@ if (form) {
     const caso = b.dataset.caso;
     if (b.getAttribute("aria-selected") === "true") return;
     tabs.forEach((t) => t.setAttribute("aria-selected", t === b));
-    document.getElementById("pdf-ejemplo").href = `assets/informe/informe-ejemplo-${caso}.pdf`;
     document.getElementById("demo-informe").href = `app/?demo=${caso}`;
     sello.querySelector("b").textContent = NIVEL[caso];
     ab.classList.add("cambiando");
     setTimeout(() => {
       hojas.forEach((h) => {
         const n = h.dataset.n, img = h.querySelector("img");
-        img.srcset = `assets/informe/${caso}-${n}-chico.jpg 520w, assets/informe/${caso}-${n}.jpg 900w`;
         img.src = `assets/informe/${caso}-${n}.jpg`;
       });
       Promise.all(hojas.map((h) => h.querySelector("img").decode().catch(() => {}))).then(() => ab.classList.remove("cambiando"));
