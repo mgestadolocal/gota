@@ -279,3 +279,48 @@ section { position: relative; }
 .acceso .fuerza i.n3 { background: #7fd3ff; }
 .acceso .fuerza i.n4 { background: #5ce0a8; }
 .acceso input[readonly] { opacity: 0.7; }
+
+/* ---------- informe ---------- */
+.informe { padding: 120px 0; border-top: 1px solid var(--linea); background: radial-gradient(60% 70% at 85% 45%, rgba(27, 111, 179, 0.2), transparent 70%); overflow: hidden; }
+.informe .contenedor { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 70px; align-items: center; }
+.incluye-informe { list-style: none; padding: 0; margin: 30px 0 0; display: grid; gap: 4px; counter-reset: inf; }
+.incluye-informe li { counter-increment: inf; display: grid; grid-template-columns: 42px 1fr; padding: 13px 0; border-top: 1px solid var(--linea); }
+.incluye-informe li::before { content: "0" counter(inf); grid-row: span 2; font: 600 13px var(--mono); color: var(--agua); padding-top: 3px; }
+.incluye-informe b { font-size: 17px; }
+.incluye-informe span { color: var(--suave); font-size: 15px; line-height: 1.5; }
+.informe .selector { display: inline-flex; gap: 4px; padding: 4px; margin-top: 28px; border: 1px solid var(--linea); border-radius: 12px; background: rgba(5, 14, 22, 0.6); }
+.informe .selector button { font: 600 13px var(--mono); letter-spacing: 0.04em; color: var(--suave); background: none; border: 0; border-radius: 9px; padding: 9px 14px; cursor: pointer; transition: background 0.2s, color 0.2s; }
+.informe .selector button[aria-selected="true"] { background: rgba(92, 200, 255, 0.14); color: var(--texto); box-shadow: inset 0 0 0 1px var(--linea-2); }
+.informe .ctas { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 18px; }
+.pista-informe { margin: 14px 0 0; font: 500 12.5px var(--mono); color: var(--tenue); letter-spacing: 0.04em; }
+
+.abanico { position: relative; aspect-ratio: 1 / 1.08; width: 100%; max-width: 560px; justify-self: center; perspective: 1600px; }
+.hoja-i { position: absolute; top: 4%; left: 50%; width: 66%; aspect-ratio: 210 / 297; padding: 0; border: 0; border-radius: 6px; overflow: hidden; cursor: pointer; background: #fff;
+  box-shadow: 0 30px 70px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.06); transition: transform 0.7s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.4s, filter 0.5s; }
+.hoja-i img { width: 100%; height: 100%; object-fit: cover; display: block; transition: opacity 0.35s; }
+.hoja-i:focus-visible { outline: 3px solid var(--agua); outline-offset: 4px; }
+/* posiciones del abanico: p0 al frente */
+.hoja-i.p0 { transform: translateX(-50%) rotate(-2deg); z-index: 3; }
+.hoja-i.p1 { transform: translateX(-18%) translateY(3%) rotate(7deg) scale(0.94); z-index: 2; filter: brightness(0.72); }
+.hoja-i.p2 { transform: translateX(-84%) translateY(5%) rotate(-11deg) scale(0.9); z-index: 1; filter: brightness(0.55); }
+.abanico:hover .hoja-i.p1 { transform: translateX(-6%) translateY(2%) rotate(10deg) scale(0.94); }
+.abanico:hover .hoja-i.p2 { transform: translateX(-96%) translateY(4%) rotate(-14deg) scale(0.9); }
+.hoja-i.p1:hover, .hoja-i.p2:hover { filter: brightness(0.92); }
+.abanico.cambiando .hoja-i img { opacity: 0; }
+.sello { position: absolute; z-index: 4; font: 700 12px var(--mono); letter-spacing: 0.08em; text-transform: uppercase; padding: 9px 14px; border-radius: 30px; white-space: nowrap; pointer-events: none;
+  backdrop-filter: blur(8px); box-shadow: 0 12px 30px rgba(0, 0, 0, 0.4); }
+.sello.s1 { left: 2%; top: 80%; background: rgba(229, 96, 62, 0.92); color: #fff; }
+.sello.s1 b { font-weight: 800; }
+.sello.s2 { right: 0; top: 10%; background: rgba(5, 14, 22, 0.85); color: var(--agua-2); border: 1px solid var(--linea-2); }
+.abanico .puntos { position: absolute; left: 50%; bottom: 0; transform: translateX(-50%); display: flex; gap: 8px; }
+.abanico .puntos i { width: 7px; height: 7px; border-radius: 50%; background: var(--linea-2); transition: background 0.3s, width 0.3s; }
+.abanico .puntos i.on { width: 22px; border-radius: 6px; background: var(--agua); }
+@media (max-width: 900px) {
+  .informe { padding: 90px 0; }
+  .informe .contenedor { grid-template-columns: 1fr; gap: 50px; }
+  .abanico { max-width: 440px; }
+  .sello.s1 { top: auto; bottom: 10%; }
+}
+@media (max-width: 520px) { .sello { font-size: 10.5px; padding: 7px 11px; } .informe .ctas .boton { width: 100%; justify-content: center; } }
+@media (prefers-reduced-motion: reduce) { .hoja-i { transition: none; } }
+@media (max-width: 520px) { .informe .selector { display: flex; } .informe .selector button { flex: 1; white-space: nowrap; font-size: 11.5px; padding: 9px 6px; } }

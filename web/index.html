@@ -55,6 +55,7 @@
         "mainEntity": [
           { "@type": "Question", "name": "¿Qué es Gotyx?", "acceptedAnswer": { "@type": "Answer", "text": "Una plataforma web de simulación hidrológica: dibujas un terreno en cualquier lugar de Chile y ves por dónde escurre el agua lluvia, dónde se acumula, cuánto caudal baja por cada quebrada y cómo cambia con tormentas de 2 a 100 años de período de retorno." } },
           { "@type": "Question", "name": "¿Sirve para evaluar el riesgo de inundación o anegamiento de un terreno?", "acceptedAnswer": { "@type": "Answer", "text": "Sí, como prediagnóstico. Muestra las zonas que se anegan, las quebradas que cruzan el terreno y el agua que llega desde los predios vecinos. Para un proyecto de ingeniería se complementa con un levantamiento topográfico y un estudio hidrológico de detalle." } },
+          { "@type": "Question", "name": "¿Qué incluye el informe PDF?", "acceptedAnswer": { "@type": "Answer", "text": "Tres hojas A4: portada con la vista del terreno, cifras clave y nivel de atención (bajo, medio o alto); mapas de escurrimiento y acumulación con la distribución de pendientes; y la tormenta de diseño con balance de agua, caudal máximo, indicadores con semáforo y recomendaciones." } },
           { "@type": "Question", "name": "¿De dónde salen los datos de lluvia y de relieve?", "acceptedAnswer": { "@type": "Answer", "text": "El relieve viene del modelo satelital Copernicus GLO-30 (30 m) o del DEM de tu dron o LiDAR. Las lluvias extremas, de GPEX (TU Delft), y la cobertura del suelo, de ESA WorldCover." } },
           { "@type": "Question", "name": "¿Funciona en cualquier región de Chile?", "acceptedAnswer": { "@type": "Answer", "text": "Sí, desde Arica hasta Magallanes. En el norte desértico hay menos registros de lluvias extremas, y la plataforma lo indica cuando ocurre." } },
           { "@type": "Question", "name": "¿Puedo usar el modelo de elevación de mi dron?", "acceptedAnswer": { "@type": "Answer", "text": "Sí. Subes un GeoTIFF en UTM (WGS84 o SIRGAS) y el análisis se hace con su resolución." } },
@@ -86,6 +87,7 @@
       <ul>
         <li><a href="#funciona">Cómo funciona</a></li>
         <li><a href="#casos">Casos</a></li>
+        <li><a href="#informe">Informe</a></li>
         <li><a href="#quien">Para quién</a></li>
         <li><a href="#datos">Datos</a></li>
         <li><a href="#preguntas">Preguntas</a></li>
@@ -123,8 +125,8 @@
   <!-- cifras -->
   <section class="cifras">
     <div class="contenedor">
-      <div class="cifra aparece"><b><span data-contar="77.8" data-dec="1">0</span><small>m³/s</small></b><span>bajarían por la Quebrada de Macul con una tormenta de 100 años</span></div>
-      <div class="cifra aparece d1"><b><span data-contar="11.5" data-dec="1">0</span><small>M m³</small></b><span>de agua vuelven a juntarse en la Laguna de Aculeo</span></div>
+      <div class="cifra aparece"><b><span data-contar="79.3" data-dec="1">0</span><small>m³/s</small></b><span>bajarían por la Quebrada de Macul con una tormenta de 100 años</span></div>
+      <div class="cifra aparece d1"><b><span data-contar="9.0" data-dec="1">0</span><small>M m³</small></b><span>de agua vuelven a juntarse en la Laguna de Aculeo</span></div>
       <div class="cifra aparece d2"><b><span data-contar="30" data-dec="0">0</span><small>m</small></b><span>de resolución satelital en todo Chile, o el DEM de tu dron</span></div>
       <div class="cifra aparece d3"><b>2–<span data-contar="100" data-dec="0">0</span><small>años</small></b><span>tormentas de diseño para el punto exacto de tu terreno</span></div>
     </div>
@@ -194,7 +196,7 @@
           <div class="lugar"><span class="vivo"></span>Escorrentía · Peñalolén, Santiago</div>
           <h3>Quebrada de Macul</h3>
           <p>En 1993 un aluvión bajó por esta quebrada. ¿Cuánta agua bajaría hoy con una tormenta extrema?</p>
-          <div class="grande"><span data-contar="77.8" data-dec="1">0</span><small>m³/s</small></div>
+          <div class="grande"><span data-contar="79.3" data-dec="1">0</span><small>m³/s</small></div>
           <div class="nota">en la salida de la quebrada · 134 mm en 24 h · tormenta de 100 años</div>
           <a class="boton fantasma" href="app/?demo=macul">Abrir en la demo<svg><use href="#flecha" /></svg></a>
         </article>
@@ -203,10 +205,44 @@
           <div class="lugar"><span class="vivo"></span>Acumulación · Paine, RM</div>
           <h3>Laguna de Aculeo</h3>
           <p>Se secó en 2018. ¿Dónde se junta el agua de sus cerros cuando llueve fuerte?</p>
-          <div class="grande"><span data-contar="11.5" data-dec="1">0</span><small>millones de m³</small></div>
+          <div class="grande"><span data-contar="9.0" data-dec="1">0</span><small>millones de m³</small></div>
           <div class="nota">vuelven a la cuenca · 160 mm en 24 h · tormenta de 100 años</div>
           <a class="boton fantasma" href="app/?demo=aculeo">Abrir en la demo<svg><use href="#flecha" /></svg></a>
         </article>
+      </div>
+    </div>
+  </section>
+
+  <!-- informe -->
+  <section class="informe" id="informe">
+    <div class="contenedor">
+      <div class="texto">
+        <div class="etiqueta aparece">El informe</div>
+        <h2 class="titulo aparece d1">Un informe de riesgo <em>listo para la reunión</em></h2>
+        <p class="bajada aparece d2">Cada análisis se descarga como un PDF de 3 hojas, con tu terreno, los mapas y lo que hay que hacer. Para el directorio, el comité de inversión, el banco o el concejo.</p>
+        <ol class="incluye-informe">
+          <li class="aparece"><b>Nivel de atención</b><span>Bajo, medio o alto, de un vistazo, con el resumen de la tormenta en palabras simples.</span></li>
+          <li class="aparece d1"><b>Mapas del terreno</b><span>Vista 3D, por dónde corre el agua y dónde se acumula, más la distribución de pendientes.</span></li>
+          <li class="aparece d2"><b>Tormenta de diseño</b><span>Lluvia en el punto, cuánta agua escurre, se infiltra, queda en pozas o llega de los vecinos, y el caudal máximo.</span></li>
+          <li class="aparece d3"><b>Semáforo y recomendaciones</b><span>Indicadores de riesgo y acciones concretas: dónde no construir, qué cauce proteger, qué obras evaluar.</span></li>
+        </ol>
+        <div class="selector aparece" role="tablist" aria-label="Elige un ejemplo">
+          <button type="button" role="tab" aria-selected="true" data-caso="macul">Quebrada de Macul</button>
+          <button type="button" role="tab" aria-selected="false" data-caso="aculeo">Laguna de Aculeo</button>
+        </div>
+        <div class="ctas aparece">
+          <a class="boton primario" id="pdf-ejemplo" href="assets/informe/informe-ejemplo-macul.pdf" download><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11M7 10l5 5 5-5M5 20h14" /></svg>Descargar informe de ejemplo</a>
+          <a class="boton fantasma" id="demo-informe" href="app/?demo=macul">Genéralo en la demo<svg><use href="#flecha" /></svg></a>
+        </div>
+        <p class="pista-informe aparece">PDF real generado por Gotyx · 3 hojas A4 · ~2 MB</p>
+      </div>
+      <div class="abanico aparece d1" id="abanico" aria-label="Hojas del informe de ejemplo">
+        <button type="button" class="hoja-i h3" data-n="3" aria-label="Ver hoja 3: tormenta, indicadores y recomendaciones"><img src="assets/informe/macul-3.jpg" srcset="assets/informe/macul-3-chico.jpg 520w, assets/informe/macul-3.jpg 900w" sizes="(max-width: 900px) 70vw, 420px" alt="Hoja 3 del informe: tormenta de 100 años, indicadores con semáforo y recomendaciones" loading="lazy" width="900" height="1273" /></button>
+        <button type="button" class="hoja-i h2" data-n="2" aria-label="Ver hoja 2: terreno y mapas"><img src="assets/informe/macul-2.jpg" srcset="assets/informe/macul-2-chico.jpg 520w, assets/informe/macul-2.jpg 900w" sizes="(max-width: 900px) 70vw, 420px" alt="Hoja 2 del informe: datos del terreno, pendientes, mapas de escurrimiento y acumulación" loading="lazy" width="900" height="1273" /></button>
+        <button type="button" class="hoja-i h1" data-n="1" aria-label="Ver hoja 1: portada y nivel de atención"><img src="assets/informe/macul-1.jpg" srcset="assets/informe/macul-1-chico.jpg 520w, assets/informe/macul-1.jpg 900w" sizes="(max-width: 900px) 70vw, 420px" alt="Portada del informe: vista 3D del terreno, cifras clave y nivel de atención alto" loading="lazy" width="900" height="1273" /></button>
+        <span class="sello s1">Nivel de atención · <b>Alto</b></span>
+        <span class="sello s2">PDF · 3 hojas A4</span>
+        <div class="puntos" aria-hidden="true"><i class="on"></i><i></i><i></i></div>
       </div>
     </div>
   </section>
@@ -285,6 +321,7 @@
       <div class="lista-faq">
         <details class="aparece"><summary>¿Qué es Gotyx?</summary><p>Una plataforma web de simulación hidrológica: dibujas un terreno en cualquier lugar de Chile y ves por dónde escurre el agua lluvia, dónde se acumula, cuánto caudal baja por cada quebrada y cómo cambia con tormentas de 2 a 100 años de período de retorno.</p></details>
         <details class="aparece"><summary>¿Sirve para evaluar el riesgo de inundación o anegamiento de un terreno?</summary><p>Sí, como prediagnóstico. Muestra las zonas que se anegan, las quebradas que cruzan el terreno y el agua que llega desde los predios vecinos. Para un proyecto de ingeniería se complementa con un levantamiento topográfico y un estudio hidrológico de detalle.</p></details>
+        <details class="aparece"><summary>¿Qué incluye el informe PDF?</summary><p>Tres hojas A4: una portada con la vista del terreno, las cifras clave y el nivel de atención (bajo, medio o alto); los mapas de escurrimiento y acumulación con la distribución de pendientes; y la tormenta de diseño con el balance de agua, el caudal máximo, indicadores con semáforo y recomendaciones concretas. Puedes <a href="assets/informe/informe-ejemplo-macul.pdf" download style="color:var(--agua)">descargar un ejemplo</a>.</p></details>
         <details class="aparece"><summary>¿De dónde salen los datos de lluvia y de relieve?</summary><p>El relieve viene del modelo satelital Copernicus GLO-30 (30 m) o del DEM de tu dron o LiDAR. Las lluvias extremas, de GPEX (TU Delft), y la cobertura del suelo, de ESA WorldCover. Con eso se calculan la escorrentía (número de curva SCS) y los caudales (método racional).</p></details>
         <details class="aparece"><summary>¿Funciona en cualquier región de Chile?</summary><p>Sí, desde Arica hasta Magallanes. En el norte desértico hay menos registros de lluvias extremas, y la plataforma lo indica cuando ocurre.</p></details>
         <details class="aparece"><summary>¿Puedo usar el modelo de elevación de mi dron?</summary><p>Sí. Subes un GeoTIFF en UTM (WGS84 o SIRGAS) y el análisis se hace con su resolución, ideal para drenaje agrícola o nivelación de potreros.</p></details>

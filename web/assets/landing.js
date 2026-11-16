@@ -45,7 +45,7 @@ const lectura = $("#lectura");
 if (lectura && !reducir) {
   const casos = [
     ["−33.5000", "−70.4970", "T = 100 AÑOS · 134 mm / 24 h"],
-    ["−33.5000", "−70.4970", "CAUDAL MÁX. 77,8 m³/s"],
+    ["−33.5000", "−70.4970", "CAUDAL MÁX. 79,3 m³/s"],
   ];
   let i = 0;
   setInterval(() => {
@@ -141,3 +141,45 @@ if (form) {
     } finally { boton.disabled = false; }
   });
 }
+
+// ---------- informe: abanico de hojas y selector de ejemplo ----------
+(() => {
+  const ab = document.getElementById("abanico");
+  if (!ab) return;
+  const hojas = [...ab.querySelectorAll(".hoja-i")]; // en el DOM: 3, 2, 1
+  const puntos = [...ab.querySelectorAll(".puntos i")];
+  const sello = ab.querySelector(".sello.s1");
+  const NIVEL = { macul: "Alto", aculeo: "Alto" };
+  let orden = [1, 2, 3]; // número de hoja al frente, segunda, tercera
+  const pintar = () => {
+    hojas.forEach((h) => { h.classList.remove("p0", "p1", "p2"); h.classList.add("p" + orden.indexOf(+h.dataset.n)); });
+    puntos.forEach((p, i) => p.classList.toggle("on", i === orden[0] - 1));
+    sello.style.opacity = orden[0] === 1 ? 1 : 0;
+  };
+  hojas.forEach((h) => h.addEventListener("click", () => {
+    const n = +h.dataset.n;
+    orden = n === orden[0] ? [...orden.slice(1), n] : [n, ...orden.filter((x) => x !== n)];
+    pintar();
+  }));
+  sello.style.transition = "opacity 0.3s";
+  pintar();
+
+  const tabs = [...document.querySelectorAll(".informe .selector button")];
+  tabs.forEach((b) => b.addEventListener("click", () => {
+    const caso = b.dataset.caso;
+    if (b.getAttribute("aria-selected") === "true") return;
+    tabs.forEach((t) => t.setAttribute("aria-selected", t === b));
+    document.getElementById("pdf-ejemplo").href = `assets/informe/informe-ejemplo-${caso}.pdf`;
+    document.getElementById("demo-informe").href = `app/?demo=${caso}`;
+    sello.querySelector("b").textContent = NIVEL[caso];
+    ab.classList.add("cambiando");
+    setTimeout(() => {
+      hojas.forEach((h) => {
+        const n = h.dataset.n, img = h.querySelector("img");
+        img.srcset = `assets/informe/${caso}-${n}-chico.jpg 520w, assets/informe/${caso}-${n}.jpg 900w`;
+        img.src = `assets/informe/${caso}-${n}.jpg`;
+      });
+      Promise.all(hojas.map((h) => h.querySelector("img").decode().catch(() => {}))).then(() => ab.classList.remove("cambiando"));
+    }, 300);
+  }));
+})();
