@@ -12,6 +12,7 @@ import { pintar, sombreado, curvas, equidistancia, leyenda, CLASES_PEND } from "
 import { cargarCobertura } from "./cobertura.js";
 import { cargarCaucesOSM, rasterizarCauces, convieneQuemar } from "./cauces_osm.js";
 import { lluviasDiseno, ajusteIDF, numerosCurva, SUELOS } from "./lluvia.js";
+import { riosQueEntran } from "./rios_entrada.js";
 
 const params = new URLSearchParams(location.search);
 const API = (params.get("api") || window.GOTA_API || location.origin).replace(/\/$/, "");
@@ -21,6 +22,10 @@ const $ = (id) => document.getElementById(id);
 // Sin ?demo= hace falta haber ingresado; si no, se envía a la pantalla de acceso.
 const TOKEN = (() => { try { return localStorage.getItem("gotyx-sesion"); } catch { return null; } })();
 const MODO_DEMO = ["macul", "aculeo"].includes(params.get("demo"));
+// Mejoras de la validación DGA (nov-2026), en revisión: solo con ?v2=1 (producción sigue igual sin el parámetro).
+//  · apertura de pozas falsas del DSM (terraplenes, puentes, copas) · ríos que entran desde aguas arriba (capa nacional)
+const V2 = params.get("v2") === "1";
+const RIO_MAX_KM2 = 1500;
 if (TOKEN) window.__gotyxAuth = { Authorization: `Bearer ${TOKEN}` };
 if (!MODO_DEMO && !TOKEN) location.replace("../ingresar.html");
 async function salir() {
@@ -431,15 +436,38 @@ $("b-analizar").onclick = async () => {
         const q = rasterizarCauces(g, lineas);
         quema = q.quema;
         const nombres = [...new Set(lineas.map((l) => l.nombre).filter(Boolean))];
-        E.osm = { km: q.km, nombres, rioExterno: q.rioExterno, riosExternos: q.riosExternos };
+        E.osm = { km: q.km, nombres, rioExterno: q.rioExterno, riosExternos: q.riosExternos, lineas };
       } else E.osm = { km: 0, nombres: [] };
     }
     estado(`Calculando escurrimiento y pendientes (${fmt(g.w * g.h)} celdas)…`);
     const r = await pedir({ tipo: "analizar", w: g.w, h: g.h, z: g.z.slice(), mask: mask.slice(), dx: g.dx, dy: g.dy, quema,
+      abrir: V2 ? { radio: 20, alto: 15 } : null,
       externo: E.osm?.riosExternos?.length ? E.osm.rioExterno : null }, quema ? [quema.buffer] : []);
-    notaOSM();
+    // v2: ríos que entran desde aguas arriba. Solo se suman los de hasta 1.500 km² (rango validado con las
+    // estaciones DGA); los mayores (Maipo, Biobío…: nieve, embalses, método racional fuera de escala) se avisan y su
+    // cauce aguas abajo no cuenta como caudal máximo, igual que hoy.
+    let entradas = [], grandes = [], rioGrande = null;
+    if (V2) {
+      try {
+        const todas = await riosQueEntran(g, r);
+        entradas = todas.filter((e) => e.areaKm2 <= RIO_MAX_KM2);
+        grandes = todas.filter((e) => e.areaKm2 > RIO_MAX_KM2);
+        rioGrande = new Uint8Array(g.w * g.h);
+        const VX = [1, 1, 0, -1, -1, -1, 0, 1], VY = [0, 1, 1, 1, 0, -1, -1, -1];
+        for (const e of grandes) {
+          for (let i = e.i, k = 0; i >= 0 && k < g.w * g.h && !rioGrande[i]; k++) {
+            rioGrande[i] = 1;
+            const d = r.dir[i];
+            if (d < 0) break;
+            const rr = Math.floor(i / g.w) + VY[d], cc = (i % g.w) + VX[d];
+            i = rr < 0 || cc < 0 || rr >= g.h || cc >= g.w ? -1 : rr * g.w + cc;
+          }
+        }
+      } catch (err) { console.warn("ríos de aguas arriba", err); }
+    }
     E.g = g;
-    E.an = { ...r, mask, sombra: sombreado(g), borde: difuminado(mask, g.w, g.h) };
+    E.an = { ...r, mask, sombra: sombreado(g), borde: difuminado(mask, g.w, g.h), entradas, grandes, rioGrande };
+    notaOSM();
     estado("");
     if (!E.anillo) {
       const c = esquinas(g);
@@ -454,6 +482,25 @@ $("b-analizar").onclick = async () => {
   }
 };
 
+// nombre del cauce de OpenStreetMap más cercano (≤ 1,5 km) a un punto; prefiere ríos a esteros
+function nombreCauce(lon, lat) {
+  const ls = E.osm?.lineas;
+  if (!ls) return null;
+  const kx = Math.cos((lat * Math.PI) / 180) * 111.32, ky = 111.32;
+  let mejor = null, dMin = 1.5;
+  for (const l of ls) {
+    if (!l.nombre) continue;
+    for (let k = 1; k < l.puntos.length; k++) {
+      const ax = (l.puntos[k - 1][0] - lon) * kx, ay = (l.puntos[k - 1][1] - lat) * ky;
+      const bx = (l.puntos[k][0] - lon) * kx, by = (l.puntos[k][1] - lat) * ky;
+      const vx = bx - ax, vy = by - ay, L2 = vx * vx + vy * vy;
+      const t = L2 ? Math.max(0, Math.min(1, -(ax * vx + ay * vy) / L2)) : 0;
+      const d = Math.hypot(ax + t * vx, ay + t * vy) + (l.tipo === "river" ? 0 : 0.3);
+      if (d < dMin) { dMin = d; mejor = l.nombre; }
+    }
+  }
+  return mejor;
+}
 function notaOSM() {
   const el = $("nota-osm"), o = E.osm;
   el.hidden = !o;
@@ -463,7 +510,20 @@ function notaOSM() {
   else {
     const ej = o.nombres.slice(0, 3).join(", ");
     el.innerHTML = `El escurrimiento sigue <b>${fmt(o.km, 1)} km de ríos y esteros conocidos</b>${ej ? ` (${escH(ej)}${o.nombres.length > 3 ? "…" : ""})` : ""} de OpenStreetMap, grabados en el relieve.` +
-      (o.riosExternos?.length ? ` <b>${escH(o.riosExternos.join(", "))}</b> trae${o.riosExternos.length > 1 ? "n" : ""} agua de una cuenca mucho mayor que esta área: su caudal no se estima aquí y no cuenta como caudal máximo.` : "");
+      (o.riosExternos?.length && !E.an?.rioGrande ? ` <b>${escH(o.riosExternos.join(", "))}</b> trae${o.riosExternos.length > 1 ? "n" : ""} agua de una cuenca mucho mayor que esta área: su caudal no se estima aquí y no cuenta como caudal máximo.` : "");
+  }
+  const en = E.an?.entradas || [], gr = E.an?.grandes || [];
+  if (en.length) {
+    const km2 = en.reduce((s, e) => s + e.areaKm2, 0);
+    el.hidden = false;
+    el.innerHTML += ` Además entra${en.length > 1 ? "n" : ""} <b>${en.length} cauce${en.length > 1 ? "s" : ""} desde aguas arriba</b> con ${fmt(km2, km2 < 10 ? 1 : 0)} km² de cuenca fuera del área: su agua se suma al cálculo (red hidrográfica nacional HydroSHEDS).`;
+  }
+  if (gr.length) {
+    const km2 = Math.max(...gr.map((e) => e.areaKm2));
+    const ns = [...new Set(gr.map((e) => nombreCauce(e.lon, e.lat)).filter(Boolean))];
+    const nombres = ns.length ? ` (${escH(ns.join(", "))})` : "";
+    el.hidden = false;
+    el.innerHTML += ` Entra${gr.length > 1 ? "n" : ""} también <b>${gr.length > 1 ? `${gr.length} ríos mayores` : "un río mayor"}${nombres}</b>, con una cuenca de hasta ${fmt(km2)} km²: su crecida depende de nieve, embalses y lluvias de toda su cuenca y no se estima aquí; su cauce no cuenta como caudal máximo.`;
   }
 }
 $("t-osm").onchange = () => { if (E.an) { limpiarResultados(); estado("Vuelve a analizar para aplicar el cambio."); } };
@@ -784,7 +844,8 @@ const m3c = (v) => (v >= 1e6 ? `${fmt(v / 1e6, v >= 1e8 ? 0 : 1)} M m³` : v >= 
 // fuera del área analizada: para ellos el modelo solo ve la lluvia local y su caudal real es mucho mayor.
 function caudalVisible(an, t) {
   let iVis = -1, qVis = 0;
-  const rio = an.externo;
+  // v2: los ríos sumados desde aguas arriba sí cuentan; solo se excluyen los muy grandes (rioGrande)
+  const rio = an.rioGrande ? an.rioGrande : an.externo;
   for (let i = 0; i < t.qp.length; i++) {
     if (!an.mask[i] || an.prof[i] >= 0.01 || (rio && rio[i]) || !(t.qp[i] > qVis)) continue;
     qVis = t.qp[i]; iVis = i;
@@ -813,7 +874,7 @@ function calcularTormenta(an, T, suelo) {
   serie.p[T] ??= (async () => {
     const fila = E.lluvias.P[T];
     const cn = numerosCurva(an.clase, suelo);
-    const r = await pedir({ tipo: "tormenta", cn, P24: fila[3], idf: ajusteIDF(fila) }, [cn.buffer]);
+    const r = await pedir({ tipo: "tormenta", cn, P24: fila[3], idf: ajusteIDF(fila), entradas: an.entradas || [] }, [cn.buffer]);
     const t = { ...r, T, P24: fila[3], suelo, ...caudalVisible(an, r) };
     serie[T] = t;
     return t;
@@ -847,6 +908,7 @@ function asegurarCobertura(an) {
       }
     }
     if (an === E.an) document.querySelector('[data-capa="cobertura"]').disabled = false;
+    if ($("estado").textContent.startsWith("Leyendo cobertura")) estado("");
     return an.clase;
   })();
   return an.clasePromesa;

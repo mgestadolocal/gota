@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<title>Banco de validación Gotyx</title>
+<!-- Se sirve como /app/_banco.html (Playwright lo entrega por route), para importar los módulos reales de la app. -->
+<script src="https://cdn.jsdelivr.net/npm/geotiff@2.1.3/dist-browser/geotiff.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/proj4@2.12.1/dist/proj4.js"></script>
+</head>
+<body>
+<pre id="log"></pre>
+<script type="module">
+// Mismo camino que app.js: «Analizar terreno» (Copernicus + cauces OSM + Web Worker) y la serie de tormentas
+// (WorldCover → número de curva por suelo, GPEX en el centro del polígono, método racional del Worker).
+import { cargarCopernicus, mascara, afin } from "./dem.js";
+import { cargarCobertura } from "./cobertura.js";
+import { cargarCaucesOSM, rasterizarCauces, convieneQuemar } from "./cauces_osm.js";
+import { lluviasDiseno, ajusteIDF, numerosCurva, RETORNOS } from "./lluvia.js";
+import { riosQueEntran } from "./rios_entrada.js";
+
+const API = location.origin;
+const log = (t) => { document.getElementById("log").textContent += t + "\n"; };
+
+const trabajador = new Worker("analisis.js");
+let pendiente = null;
+trabajador.onmessage = (e) => { const p = pendiente; pendiente = null; if (e.data.tipo === "error") p.no(new Error(e.data.mensaje)); else p.si(e.data); };
+const pedir = (msg, transfer = []) => new Promise((si, no) => { pendiente = { si, no }; trabajador.postMessage(msg, transfer); });
+
+// anillo: [[lon,lat],…] cerrado; estacion: [lon,lat]; suelos: ["A","B","C","D"]
+window.correr = async (anillo, estacion, suelos = ["A", "B", "C", "D"], abrir = null, conEntradas = false, areaEst = null) => {
+  const t0 = performance.now();
+  const g = await cargarCopernicus(API, anillo, log);
+  const mask = mascara(g, anillo);
+  let quema = null, osm = null;
+  if (convieneQuemar(g)) {
+    const lineas = await cargarCaucesOSM(g);
+    if (lineas && lineas.length) {
+      const q = rasterizarCauces(g, lineas);
+      quema = q.quema;
+      osm = { km: q.km, riosExternos: q.riosExternos, rioExterno: q.rioExterno };
+    }
+  }
+  const an = await pedir({ tipo: "analizar", w: g.w, h: g.h, z: g.z.slice(), mask: mask.slice(), dx: g.dx, dy: g.dy, quema, abrir,
+    externo: osm?.riosExternos?.length ? osm.rioExterno : null }, quema ? [quema.buffer] : []);
+  const tAnal = performance.now() - t0;
+
+  // salida de la cuenca: dentro del polígono y a <= 1,5 km de la estación, la celda con mayor área aportante
+  const aLL = afin(g);
+  const kx = Math.cos((estacion[1] * Math.PI) / 180);
+  let iSal = -1, accSal = -1, iMaxAcc = -1, maxAcc = -1;
+  const cercanas = [];
+  for (let r = 0; r < g.h; r++) for (let c = 0; c < g.w; c++) {
+    const i = r * g.w + c;
+    if (!mask[i]) continue;
+    if (an.acc[i] > maxAcc) { maxAcc = an.acc[i]; iMaxAcc = i; }
+    const [x, y] = aLL(c + 0.5, r + 0.5);
+    const d = Math.hypot((x - estacion[0]) * kx, y - estacion[1]) * 111320;
+    if (d <= 1500) cercanas.push(i);
+    if (d <= 1500 && an.acc[i] > accSal) { accSal = an.acc[i]; iSal = i; }
+  }
+  if (iSal < 0) iSal = iMaxAcc;
+
+  const clase = await cargarCobertura(API, g, () => {});
+  // grupo hidrológico por celda (HYSOGs250m, lo entrega correr_modelo.py en /suelo)
+  let mapaSuelo = null;
+  try {
+    const rs = await fetch("/suelo", { method: "POST", body: JSON.stringify({ ...g.georef, w: g.w, h: g.h }) });
+    if (rs.ok) mapaSuelo = new Uint8Array(await rs.arrayBuffer());
+  } catch {}
+  const cnPorSuelo = Object.fromEntries("ABCD".split("").map((s) => [s, numerosCurva(clase, s)]));
+  // M: suelos dobles (A/D, B/D, C/D) como drenados; N: como D (sin drenar). Sin dato → C.
+  const cnMapa = (dual) => {
+    const cn = new Float32Array(clase.length);
+    const L = { 1: "A", 2: "B", 3: "C", 4: "D", 11: dual ? "A" : "D", 12: dual ? "B" : "D", 13: dual ? "C" : "D", 14: "D" };
+    for (let i = 0; i < cn.length; i++) cn[i] = cnPorSuelo[L[mapaSuelo[i]] || "C"][i];
+    return cn;
+  };
+  const fracSuelo = {};
+  if (mapaSuelo) { let k = 0; for (let i = 0; i < mask.length; i++) if (mask[i]) { k++; fracSuelo[mapaSuelo[i]] = (fracSuelo[mapaSuelo[i]] || 0) + 1; } for (const c in fracSuelo) fracSuelo[c] /= k; }
+  const v = anillo.slice(0, -1);
+  const centro = [v.reduce((s, p) => s + p[0], 0) / v.length, v.reduce((s, p) => s + p[1], 0) / v.length];
+  const ll = await lluviasDiseno(centro[0], centro[1]);
+  if (!ll) throw new Error("sin GPEX");
+
+  // fracción de cobertura dentro del polígono
+  const cob = {};
+  let nIn = 0;
+  for (let i = 0; i < mask.length; i++) if (mask[i]) { nIn++; cob[clase[i]] = (cob[clase[i]] || 0) + 1; }
+  for (const k in cob) cob[k] /= nIn;
+
+  // ríos que entran desde fuera: el MISMO módulo de la app (web/app/rios_entrada.js, teselas data/cuencas)
+  let entradas = [], infoEntradas = [];
+  if (conEntradas) {
+    entradas = await riosQueEntran(g, an);
+    
+  }
+  // área aportante total por celda (local + inyectada, siguiendo el D8 local) para ubicar la estación
+  const extra = new Float64Array(g.w * g.h);
+  const VX = [1, 1, 0, -1, -1, -1, 0, 1], VY = [0, 1, 1, 1, 0, -1, -1, -1];
+  const kxE = Math.cos((estacion[1] * Math.PI) / 180);
+  for (const e of entradas) {
+    let i = e.i;
+    e._dmin = Infinity; e._pasos = 0;
+    for (let paso = 0; paso < g.w * g.h && i >= 0; paso++) {
+      extra[i] += e.area_m2;
+      const [xx, yy] = aLL((i % g.w) + 0.5, Math.floor(i / g.w) + 0.5);
+      e._dmin = Math.min(e._dmin, Math.hypot((xx - estacion[0]) * kxE, yy - estacion[1]) * 111320); e._pasos = paso;
+      const d = an.dir[i];
+      if (d < 0) break;
+      const r = Math.floor(i / g.w) + VY[d], c = (i % g.w) + VX[d];
+      if (r < 0 || c < 0 || r >= g.h || c >= g.w) break;
+      i = r * g.w + c;
+    }
+  }
+  // celda de la estación: a <= 1,5 km, con área total más parecida a la de la estación (si se conoce)
+  let iEst = iSal;
+  if (areaEst) {
+    let best = Infinity;
+    for (const i of cercanas) {
+      const a = (an.acc[i] + extra[i]) / 1e6;
+      const s = Math.abs(Math.log(Math.max(a, 1e-6) / areaEst));
+      if (s < best) { best = s; iEst = i; }
+    }
+  }
+  const areaEstModelo = (an.acc[iEst] + extra[iEst]) / 1e6;
+  infoEntradas = entradas.map((e) => {
+    const [ex, ey] = aLL((e.i % g.w) + 0.5, Math.floor(e.i / g.w) + 0.5);
+    return { area_km2: e.areaKm2, cn: e.cn, lon_hs: e.lon, lat_hs: e.lat, lon: ex, lat: ey, dmin_estacion_m: Math.round(e._dmin), pasos: e._pasos };
+  });
+
+  const res = {};
+  for (const s of suelos) {
+    res[s] = {};
+    for (const T of RETORNOS) {
+      const fila = ll.P[T];
+      if ((s === "M" || s === "N") && !mapaSuelo) continue;
+      const cn = s === "M" ? cnMapa(true) : s === "N" ? cnMapa(false) : numerosCurva(clase, s);
+      const r = await pedir({ tipo: "tormenta", cn, P24: fila[3], idf: ajusteIDF(fila), diag: iSal, entradas }, [cn.buffer]);
+      // caudal máximo visible, igual que la app (fuera de lagunas, llanos rellenados y ríos externos)
+      let qVis = 0;
+      for (let i = 0; i < r.qp.length; i++) {
+        if (!mask[i] || an.prof[i] >= 0.01 || (an.externo && an.externo[i]) || !(r.qp[i] > qVis)) continue;
+        qVis = r.qp[i];
+      }
+      // caudal del río en la estación: el máximo a <= 1,5 km (con ríos inyectados la celda de mayor área local
+      // puede ser un afluente)
+      let qRio = 0;
+      for (const i of cercanas) if (r.qp[i] > qRio) qRio = r.qp[i];
+      res[s][T] = { qSalida: r.qp[iSal], qRio, qEst: r.qp[iEst], qVis, qMax: r.stats.qMax, cnMedio: r.stats.cnMedio,
+        genera: r.stats.genera, llueve: r.stats.llueve, enCharcos: r.stats.enCharcos, diag: r.diag, idf: ajusteIDF(fila) };
+    }
+  }
+  const [lonS, latS] = aLL((iSal % g.w) + 0.5, Math.floor(iSal / g.w) + 0.5);
+  return {
+    celdas: g.w * g.h, dx: g.dx, dy: g.dy, areaMask_km2: (nIn * g.dx * g.dy) / 1e6,
+    areaSalida_km2: (an.acc[iSal]) / 1e6, salida: [lonS, latS], accMax_km2: maxAcc / 1e6,
+    osmKm: osm?.km ?? 0, riosExternos: osm?.riosExternos ?? [],
+    suelos: fracSuelo, lluvia: ll.P, gpexDistKm: ll.distanciaKm, centro, cobertura: cob,
+    encharca: an.stats.encVol, abrir: an.stats.abrir, entradas: infoEntradas, areaEstModelo, pendMedia: an.stats.pendMedia, res, seg: { analisis: tAnal / 1000, total: (performance.now() - t0) / 1000 },
+  };
+};
+window.listo = true;
+</script>
+</body>
+</html>

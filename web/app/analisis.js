@@ -13,9 +13,9 @@ self.onmessage = (e) => {
   const m = e.data;
   try {
     if (m.tipo === "analizar") {
-      const g = { w: m.w, h: m.h, z: m.z, mask: m.mask, dx: m.dx, dy: m.dy, quema: m.quema || null, externo: m.externo || null };
+      const g = { w: m.w, h: m.h, z: m.z, mask: m.mask, dx: m.dx, dy: m.dy, quema: m.quema || null, externo: m.externo || null, abrir: m.abrir || null };
       const r = analizar(g);
-      delete g.quema; delete g.externo;
+      delete g.quema; delete g.externo; delete g.abrir;
       U = { ...g, f: r._f, orden: r._orden, dir: r.dir.slice(), prof: r.prof.slice(), acc: r.acc.slice() };
       delete r._f; delete r._orden;
       self.postMessage({ tipo: "analisis", ...r }, [r.pendiente.buffer, r.prof.buffer, r.acc.buffer, r.dir.buffer].concat(r.externo ? [r.externo.buffer] : []));
@@ -104,7 +104,80 @@ function rellenar(w, h, z) {
   return f;
 }
 
-function analizar({ w, h, z, mask, dx, dy, quema, externo }) {
+// Apertura de pozas por el camino de menor costo (en la línea de Lindsay 2016, «breach depressions least cost»).
+// En un modelo de superficie como Copernicus, los terraplenes, puentes y copas de árboles forman pozas falsas
+// que retienen el agua. Desde cada fondo de poza se busca la celda más baja alcanzable cortando una barrera de
+// a lo más `radio` celdas y `alto` m sobre el fondo; si se encuentra, se rebaja ese camino. Las barreras
+// anchas o altas (el borde de una laguna real) no se cortan y la poza se mantiene.
+function abrirPozas(w, h, z0, dist, { radio = 20, alto = 15 } = {}) {
+  const n = w * h;
+  const z = Float32Array.from(z0);
+  const lado = 2 * radio + 1;
+  const m = lado * lado;
+  const costo = new Float64Array(m), previo = new Int32Array(m), sello = new Int32Array(m);
+  const heap = new Monticulo(m * 8);
+  let marca = 0, abiertas = 0, celdas = 0;
+  const esFondo = (r, c, i) => {
+    const zi = z[i];
+    if (Number.isNaN(zi) || r === 0 || c === 0 || r === h - 1 || c === w - 1) return false;
+    for (let k = 0; k < 8; k++) {
+      const v = (r + VY[k]) * w + c + VX[k];
+      if (Number.isNaN(z[v]) || z[v] < zi) return false;
+      if (z[v] === zi && v < i) return false; // una sola semilla por plano (la de menor índice)
+    }
+    return true;
+  };
+  const fondos = [];
+  for (let r = 1; r < h - 1; r++) for (let c = 1; c < w - 1; c++) { const i = r * w + c; if (esFondo(r, c, i)) fondos.push(i); }
+  fondos.sort((a, b) => z[a] - z[b]);
+  const camino = [];
+  for (const p of fondos) {
+    const pr = (p / w) | 0, pc = p - pr * w;
+    if (!esFondo(pr, pc, p)) continue; // ya se abrió al abrir otra
+    const zp = z[p];
+    marca++; heap.n = 0;
+    const loc = (r, c) => (r - pr + radio) * lado + (c - pc + radio);
+    let j = loc(pr, pc);
+    sello[j] = marca; costo[j] = 0; previo[j] = -1;
+    heap.push(j, 0);
+    let meta = -1;
+    while (heap.n) {
+      const jj = heap.pop();
+      const r = pr + ((jj / lado) | 0) - radio, c = pc + (jj % lado) - radio;
+      const i = r * w + c;
+      if (i !== p && (z[i] < zp || Number.isNaN(z[i]) || r === 0 || c === 0 || r === h - 1 || c === w - 1)) { meta = jj; break; }
+      for (let k = 0; k < 8; k++) {
+        const rr = r + VY[k], cc = c + VX[k];
+        if (rr < 0 || cc < 0 || rr >= h || cc >= w || Math.abs(rr - pr) > radio || Math.abs(cc - pc) > radio) continue;
+        const v = rr * w + cc;
+        const sobre = Number.isNaN(z[v]) ? 0 : z[v] - zp;
+        if (sobre > alto) continue;
+        const nuevo = costo[jj] + Math.max(0, sobre) * dist[k] + 1e-3 * dist[k];
+        const jv = loc(rr, cc);
+        if (sello[jv] === marca && costo[jv] <= nuevo) continue;
+        sello[jv] = marca; costo[jv] = nuevo; previo[jv] = jj;
+        heap.push(jv, nuevo);
+      }
+    }
+    if (meta < 0) continue;
+    // rebajar el camino desde el fondo hasta la salida, siempre en descenso
+    camino.length = 0;
+    for (let jj = meta; jj >= 0; jj = previo[jj]) camino.push(jj);
+    camino.reverse();
+    let cota = zp;
+    for (let s = 1; s < camino.length; s++) {
+      const r = pr + ((camino[s] / lado) | 0) - radio, c = pc + (camino[s] % lado) - radio;
+      const i = r * w + c;
+      if (Number.isNaN(z[i])) break;
+      cota -= 1e-3;
+      if (z[i] > cota) { z[i] = cota; celdas++; } else cota = z[i];
+    }
+    abiertas++;
+  }
+  return { z, abiertas, celdas, fondos: fondos.length };
+}
+
+function analizar({ w, h, z, mask, dx, dy, quema, externo, abrir }) {
   const n = w * h;
   const A = dx * dy;
   const dd = Math.hypot(dx, dy);
@@ -114,6 +187,13 @@ function analizar({ w, h, z, mask, dx, dy, quema, externo }) {
   // sobre el DEM con los cauces rebajados; el encharcamiento se mide contra el DEM original (nunca negativo).
   let zq = z;
   if (quema) { zq = new Float32Array(n); for (let i = 0; i < n; i++) zq[i] = z[i] - quema[i]; }
+  let infoAbrir = null;
+  if (abrir) {
+    const t0 = performance.now();
+    const a = abrirPozas(w, h, zq, dist, abrir);
+    zq = a.z;
+    infoAbrir = { abiertas: a.abiertas, fondos: a.fondos, celdas: a.celdas, ms: performance.now() - t0 };
+  }
   const f = rellenar(w, h, zq);
   const prof = new Float32Array(n);
   for (let i = 0; i < n; i++) prof[i] = Number.isNaN(z[i]) ? NaN : Math.max(0, f[i] - z[i]);
@@ -212,7 +292,7 @@ function analizar({ w, h, z, mask, dx, dy, quema, externo }) {
     stats: {
       celdas: nc, area: nc * A, zmin, zmax, zmedia: zsum / nc, pendMedia: psum / nc,
       clases: clases.map((x) => x / nc), limites: CLASES.slice(0, -1),
-      encArea, encVol, encMax, accMax,
+      encArea, encVol, encMax, accMax, abrir: infoAbrir,
     },
   };
 }
@@ -273,6 +353,19 @@ function tormenta(Ur, p) {
   // longitud de flujo más larga, cota de su inicio y CN medio aguas arriba (para el método racional)
   const L = new Float64Array(n), zIni = Float64Array.from(z), cnA = new Float64Array(n), area = new Float64Array(n);
   for (let i = 0; i < n; i++) { cnA[i] = cn[i] * A; area[i] = A; }
+  // entradas de ríos desde fuera de la grilla (capa nacional de cuencas): cada una aporta su área, CN medio,
+  // escorrentía y recorrido más largo en la celda local donde entra; desde ahí sigue el flujo D8 local.
+  // Su lluvia es la misma de la tormenta (P24) por ahora.
+  let entraRios = 0;
+  for (const e of p.entradas || []) {
+    const i = e.i;
+    if (!(i >= 0 && i < n) || Number.isNaN(z[i])) continue;
+    const Ae = e.area_m2;
+    area[i] += Ae; cnA[i] += e.cn * Ae;
+    const vol = (qSCS(P24, e.cn) / 1000) * Ae;
+    W[i] += vol; entraRios += vol;
+    if (e.L_m > L[i]) { L[i] = e.L_m; zIni[i] = e.zIni; }
+  }
 
   let saleDelPoligono = 0, entraAlPoligono = 0;
   for (let t = 0; t < orden.length; t++) {
@@ -332,9 +425,14 @@ function tormenta(Ur, p) {
     if (profT[i] >= 0.02) { enCharcos += profT[i] * A; aCharcos += A; }
     if (qp[i] > qMax) { qMax = qp[i]; iMax = i; }
   }
+  // diagnóstico opcional (validación, tools/validacion): ingredientes del método racional en una celda
+  const kd = p.diag;
+  const diag = Number.isInteger(kd) && kd >= 0 && kd < n
+    ? { area: area[kd], L: Math.max(L[kd], dx), H: zIni[kd] - z[kd], cn: area[kd] > 0 ? cnA[kd] / area[kd] : NaN, qp: qp[kd] }
+    : null;
   return {
-    profT, qp, escurre,
+    profT, qp, escurre, diag,
     stats: { llueve, genera, infiltra: llueve - genera, enCharcos, aCharcos, sale: saleDelPoligono, entra: entraAlPoligono,
-      qMax, iMax, cnMedio: Array.from(cn).reduce((s, v, i) => s + (mask[i] ? v : 0), 0) / nc },
+      qMax, iMax, entraRios, cnMedio: Array.from(cn).reduce((s, v, i) => s + (mask[i] ? v : 0), 0) / nc },
   };
 }
